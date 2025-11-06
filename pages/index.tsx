@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import type { SafetyReport } from '@/lib/helius';
-import Head from 'next/head'; // Import Head for title
+import Head from 'next/head'; 
 
-// Use a more professional font (optional, but nice)
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 type Report = SafetyReport; 
 
-// --- NEW HELPER FUNCTIONS ---
+// --- HELPER FUNCTIONS (NOW FIXED) ---
 
 // Formats large numbers into K (thousands), M (millions), B (billions)
 function formatNumber(num: number): string {
@@ -20,11 +19,27 @@ function formatNumber(num: number): string {
 }
 
 // Formats numbers as USD currency
-function formatUSD(num: number): string {
-  if (!num) return '$0.00';
-  if (num < 0.01) return `$${num.toPrecision(4)}`;
+function formatUSD(value: string | number | undefined): string {
+  // --- THIS IS THE FIX ---
+  // 1. Safely parse the value to a number.
+  const num = parseFloat(String(value)); 
+  // 2. Check if it's a valid number.
+  if (isNaN(num)) return '$0.00';
+  // -----------------------
+
+  if (num === 0) return '$0.00';
+  if (num < 0.01) return `$${num.toPrecision(4)}`; // This is now safe
   return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
+
+// --- NEW HELPER ---
+// Formats the native price (SOL)
+function formatNativePrice(value: string | number | undefined): string {
+  const num = parseFloat(String(value));
+  if (isNaN(num)) return '0';
+  return num.toPrecision(4); // This is now safe
+}
+
 
 // Formats a timestamp into a readable date
 function formatDate(timestamp: number): string {
@@ -87,7 +102,7 @@ export default function Home() {
         <meta name="description" content="Check Solana SPL tokens for safety, market data, and charts." />
       </Head>
       <div className={`flex flex-col items-center min-h-screen bg-gray-900 text-white p-4 md:p-8 ${inter.className}`}>
-        <main className="w-full max-w-4xl"> {/* <-- Increased max-width */}
+        <main className="w-full max-w-4xl">
           {/* 1. Header */}
           <h1 className="text-3xl md:text-4xl font-bold text-center mb-2">
             Solana Token Analyzer
@@ -118,7 +133,7 @@ export default function Home() {
           {/* 3. Results Area */}
           <div className="mt-6">
             {error && <ErrorMessage message={error} />}
-            {report && <ReportCard report={report} />} {/* <-- Updated ReportCard */}
+            {report && <ReportCard report={report} />}
             {!isLoading && !error && !report && <InfoBox />}
           </div>
           
@@ -219,7 +234,7 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
       />
       <StatCard 
         title={`Price ${pair.quoteToken.symbol}`}
-        value={Number(pair.priceNative).toPrecision(4)} 
+        value={formatNativePrice(pair.priceNative)} // <-- USE SAFER HELPER
       />
       <StatCard 
         title="Market Cap" 
@@ -276,7 +291,7 @@ const StatCard = ({ title, value, change, tooltip }: { title: string, value: str
     <p className="text-sm text-gray-400 truncate">{title}</p>
     <div className="flex items-baseline gap-2">
       <p className="text-xl lg:text-2xl font-bold truncate">{value}</p>
-      {change && (
+      {change != null && ( // Check for null or undefined
         <span className={change >= 0 ? 'text-green-400' : 'text-red-400'}>
           {change.toFixed(1)}%
         </span>
@@ -356,7 +371,7 @@ const ErrorMessage = ({ message }: { message: string }) => (
   </div>
 );
 
-// --- InfoBox (Unchanged) ---
+// --- InfoBox (Unchanged)S ---
 const InfoBox = () => (
   <div className="p-8 text-center bg-gray-800 border border-gray-700 rounded-lg">
     <p className="text-gray-400">
