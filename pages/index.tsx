@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
-
 import { Inter } from 'next/font/google';
+
+// --- NEW IMPORTS ---
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets';
+// -------------------
+
 const inter = Inter({ subsets: ['latin'] });
 
 type Report = SafetyReport; 
 
-// --- HELPER FUNCTIONS (NOW FIXED) ---
-
-// Formats large numbers into K (thousands), M (millions), B (billions)
+// --- Helper Functions (Unchanged) ---
 function formatNumber(num: number): string {
   if (!num) return '0';
   if (num < 1000) return num.toString();
@@ -17,31 +20,18 @@ function formatNumber(num: number): string {
   if (num < 1_000_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
   return `${(num / 1_000_000_000).toFixed(1)}B`;
 }
-
-// Formats numbers as USD currency
 function formatUSD(value: string | number | undefined): string {
-  // --- THIS IS THE FIX ---
-  // 1. Safely parse the value to a number.
   const num = parseFloat(String(value)); 
-  // 2. Check if it's a valid number.
   if (isNaN(num)) return '$0.00';
-  // -----------------------
-
   if (num === 0) return '$0.00';
-  if (num < 0.01) return `$${num.toPrecision(4)}`; // This is now safe
+  if (num < 0.01) return `$${num.toPrecision(4)}`;
   return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
-
-// --- NEW HELPER ---
-// Formats the native price (SOL)
 function formatNativePrice(value: string | number | undefined): string {
   const num = parseFloat(String(value));
   if (isNaN(num)) return '0';
-  return num.toPrecision(4); // This is now safe
+  return num.toPrecision(4); 
 }
-
-
-// Formats a timestamp into a readable date
 function formatDate(timestamp: number): string {
   if (!timestamp) return 'N/A';
   return new Date(timestamp).toLocaleDateString('en-US', {
@@ -52,27 +42,22 @@ function formatDate(timestamp: number): string {
     minute: '2-digit',
   });
 }
-
 // -----------------------------
 
 
 export default function Home() {
-  // --- React State (No changes) ---
   const [mintAddress, setMintAddress] = useState('');
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // --- Form Submission Logic (No changes) ---
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setReport(null);
     setError(null);
-
     try {
       const response = await fetch(`/api/check/${mintAddress}`);
-      
       if (!response.ok) {
         let errorMessage: string;
         try {
@@ -83,10 +68,8 @@ export default function Home() {
         }
         throw new Error(errorMessage);
       }
-
       const data: Report = await response.json();
       setReport(data);
-
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -94,19 +77,26 @@ export default function Home() {
     }
   };
 
-  // --- Main Page Render ---
   return (
     <>
       <Head>
         <title>Solana Token Analyzer</title>
         <meta name="description" content="Check Solana SPL tokens for safety, market data, and charts." />
       </Head>
+      
+      {/* --- ADDED A HEADER WITH WALLET BUTTON --- */}
+      <header className="w-full p-4 flex justify-between items-center bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
+        <h1 className="text-xl font-bold">Solana Token Analyzer</h1>
+        <WalletMultiButton />
+      </header>
+      {/* ----------------------------------------- */}
+
       <div className={`flex flex-col items-center min-h-screen bg-gray-900 text-white p-4 md:p-8 ${inter.className}`}>
         <main className="w-full max-w-4xl">
-          {/* 1. Header */}
-          <h1 className="text-3xl md:text-4xl font-bold text-center mb-2">
-            Solana Token Analyzer
-          </h1>
+          {/* 1. Header (Page Title) */}
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-2">
+            Token Dashboard
+          </h2>
           <p className="text-center text-gray-400 mb-6">
             Get safety checks, market data, and live charts for any SPL token.
           </p>
@@ -145,37 +135,26 @@ export default function Home() {
   );
 }
 
-// --- Sub-Components (All Updated) ---
+// --- Sub-Components ---
 
-/**
- * Main Report Card
- */
 const ReportCard = ({ report }: { report: Report }) => (
   <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-    {/* --- HEADER --- */}
     <div className="p-4 md:p-6 bg-gray-800">
       <h2 className="text-3xl font-bold">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
     </div>
-
-    {/* --- SOCIAL LINKS --- */}
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-3">Official Links</h3>
       <SocialLinks links={report.tokenInfo.links} />
     </div>
-
-    {/* --- LIVE TRADING CHART --- */}
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
-      <DexScreenerChart pair={report.dexScreenerPair} />
+      {/* --- SWAPPED CHART COMPONENT --- */}
+      <TradingViewChart pair={report.dexScreenerPair} />
     </div>
-
-    {/* --- MARKET DATA "THE JAZZ" --- */}
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
       <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
     </div>
-
-    {/* --- SAFETY REPORT --- */}
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Report</h3>
       <div className="space-y-4">
@@ -190,43 +169,49 @@ const ReportCard = ({ report }: { report: Report }) => (
 );
 
 /**
- * --- NEW COMPONENT ---
- * Displays the live DexScreener chart in an iframe
+ * --- REPLACED COMPONENT ---
+ * Displays a native TradingView Chart
  */
-const DexScreenerChart = ({ pair }: { pair: any }) => {
-  if (!pair?.url) {
+const TradingViewChart = ({ pair }: { pair: any }) => {
+  if (!pair) {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
-  // Use the DexScreener embed URL
-  const chartUrl = `${pair.url.replace('/dex/', '/embed/')}`;
-  
+
+  // Construct the TradingView symbol name.
+  // Example: "JTO" and "SOL" becomes "SOLANASUPERCHARTS:JTOSOL"
+  const baseSymbol = pair.baseToken.symbol;
+  const quoteSymbol = pair.quoteToken.symbol;
+  const tvSymbol = `SOLANASUPERCHARTS:${baseSymbol}${quoteSymbol}`;
+
   return (
     <div className="aspect-video w-full">
-      <iframe
-        src={chartUrl}
-        className="w-full h-full rounded-lg border border-gray-700"
-        title="DexScreener Chart"
+      <AdvancedRealTimeChart
+        theme="dark"
+        symbol={tvSymbol}
+        width="100%"
+        height="100%"
+        style="1"
+        timezone="Etc/UTC"
+        withdateranges={true}
+        hide_side_toolbar={false}
+        allow_symbol_change={true}
+        studies={["volume"]}
       />
     </div>
   );
 };
 
-/**
- * --- NEW COMPONENT ---
- * Displays all the "jazz" from your list
- */
+// --- Other Components (Unchanged) ---
+
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No market data found for this token.</p>;
   }
-  
   const txns = pair.txns?.h24 || { buys: 0, sells: 0 };
   const volume = pair.volume?.h24 || 0;
   const priceChange = pair.priceChange?.h24 || 0;
-
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-      {/* Price */}
       <StatCard 
         title="Price USD" 
         value={formatUSD(pair.priceUsd)}
@@ -234,7 +219,7 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
       />
       <StatCard 
         title={`Price ${pair.quoteToken.symbol}`}
-        value={formatNativePrice(pair.priceNative)} // <-- USE SAFER HELPER
+        value={formatNativePrice(pair.priceNative)} 
       />
       <StatCard 
         title="Market Cap" 
@@ -282,16 +267,12 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
   );
 };
 
-/**
- * --- NEW COMPONENT ---
- * Reusable card for displaying a single statistic
- */
 const StatCard = ({ title, value, change, tooltip }: { title: string, value: string, change?: number, tooltip?: string }) => (
   <div className="bg-gray-700 p-4 rounded-lg" title={tooltip}>
     <p className="text-sm text-gray-400 truncate">{title}</p>
     <div className="flex items-baseline gap-2">
       <p className="text-xl lg:text-2xl font-bold truncate">{value}</p>
-      {change != null && ( // Check for null or undefined
+      {change != null && ( 
         <span className={change >= 0 ? 'text-green-400' : 'text-red-400'}>
           {change.toFixed(1)}%
         </span>
@@ -300,10 +281,6 @@ const StatCard = ({ title, value, change, tooltip }: { title: string, value: str
   </div>
 );
 
-/**
- * --- NEW COMPONENT ---
- * Displays social links
- */
 const SocialLinks = ({ links }: { links: any }) => {
   const createLink = (name: string, url: string) => {
     if (!url) return null;
@@ -318,31 +295,24 @@ const SocialLinks = ({ links }: { links: any }) => {
       </a>
     );
   };
-
   const allLinks = [
     createLink('Website', links.website),
     createLink('Twitter', links.twitter),
     createLink('Telegram', links.telegram),
     createLink('Discord', links.discord),
-  ].filter(Boolean); // Filter out any nulls
-
+  ].filter(Boolean); 
   if (allLinks.length === 0) {
     return <p className="text-sm text-gray-500">No official links found.</p>;
   }
-
   return <div className="flex flex-wrap gap-2">{allLinks}</div>;
 };
 
-
-// --- Safety Report Item (Unchanged) ---
 const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
   const { message } = item;
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
-  
   let textColor = 'text-green-400';
   if (icon === '⚠️') textColor = 'text-yellow-400';
   if (icon === '❌') textColor = 'text-red-400';
-
   return (
     <div className={`flex items-start ${textColor}`}>
       <span className="text-xl mr-3">{icon}</span>
@@ -351,7 +321,6 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   );
 };
 
-// --- Disclaimer (Unchanged) ---
 const Disclaimer = () => (
   <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100">
     <h3 className="font-bold text-lg mb-2">⚠️ THIS IS NOT FINANCIAL ADVICE</h3>
@@ -360,18 +329,16 @@ const Disclaimer = () => (
       not guarantee a good investment. Many 'safe' tokens still fail. 'Unsafe'
       tokens may be for legitimate, in-progress projects. Always do your
       own research (DYOR).
-    </p>
+    </p> 
   </div>
 );
 
-// --- ErrorMessage (Unchanged) ---
 const ErrorMessage = ({ message }: { message: string }) => (
   <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100">
     <p><strong>Error:</strong> {message}</p>
   </div>
 );
 
-// --- InfoBox (Unchanged)S ---
 const InfoBox = () => (
   <div className="p-8 text-center bg-gray-800 border border-gray-700 rounded-lg">
     <p className="text-gray-400">
