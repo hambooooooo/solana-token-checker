@@ -11,7 +11,7 @@ export type SafetyReport = {
   mintAuthority: CheckResult;
   freezeAuthority: CheckResult;
   holderDistribution: CheckResult;
-  liquidity: CheckResult; // Note: This check is complex and will be marked as 'pass' for now
+  liquidity: CheckResult; 
   metadata: CheckResult;
   tokenInfo: {
     name: string;
@@ -34,21 +34,11 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   ]);
 
   // --- Run All Checks ---
-
-  // Check 1: Mint Authority
   const mintAuthority = checkMintAuthority(assetData);
-
-  // Check 2: Freeze Authority
   const freezeAuthority = checkFreezeAuthority(assetData);
-
-  // Check 3: Holder Distribution
   const holderDistribution = checkHolderDistribution(largestHoldersData, assetData.supply.supply);
-
-  // Check 4: Metadata Mutability
   const metadata = checkMetadata(assetData);
-
-  // Check 5: Liquidity (This is a complex, stubbed check as per the brief)
-  const liquidity = checkLiquidity();
+  const liquidity = checkLiquidity(); // This is still a stubbed check
 
   // --- Compile Final Report ---
   return {
@@ -110,12 +100,8 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
     return { status: 'fail', message: '❌ Could not retrieve holder data.' };
   }
 
-  // Get the top 10 holders
   const top10 = holders.slice(0, 10);
-
-  // Sum their balances (amount is a string, so we parse it)
   const top10Balance = top10.reduce((sum, holder) => sum + parseFloat(holder.amount), 0);
-
   const top10Percentage = (top10Balance / totalSupply) * 100;
 
   if (top10Percentage > 20) {
@@ -131,9 +117,7 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
 }
 
 function checkLiquidity(): CheckResult {
-  // NOTE: As per the brief, a true LP check is extremely complex.
-  // We will stub this check as "passing" for now.
-  // A real implementation would query Raydium/Orca pools.
+  // NOTE: This remains a stubbed check as per the brief.
   return {
     status: 'warn',
     message: '⚠️ LP Check Not Implemented: This tool does not check for locked liquidity. Always DYOR.',
@@ -159,7 +143,16 @@ async function fetchHeliusAsset(mintAddress: string): Promise<any> {
     }),
   });
   const data = await response.json();
-  if (!data.result) throw new Error('Failed to fetch asset data');
+
+  // --- IMPROVED ERROR HANDLING ---
+  if (data.error) {
+    throw new Error(`Helius getAsset error: ${data.error.message}`);
+  }
+  if (!data.result) {
+    throw new Error('Failed to fetch asset data (no result)');
+  }
+  // -------------------------------
+
   return data.result;
 }
 
@@ -178,6 +171,15 @@ async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[
     }),
   });
   const data = await response.json();
-  if (!data.result) throw new Error('Failed to fetch holder data');
+
+  // --- IMPROVED ERROR HANDLING ---
+  if (data.error) {
+    throw new Error(`Helius getTokenLargestAccounts error: ${data.error.message}`);
+  }
+  if (!data.result) {
+    throw new Error('Failed to fetch holder data (no result)');
+  }
+  // -------------------------------
+
   return data.result.value;
 }
