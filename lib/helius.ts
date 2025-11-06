@@ -294,3 +294,41 @@ async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[
   // This is the full list of holders
   return data.result.value; 
 }
+
+/**
+ * --- NEW FUNCTION ---
+ * Fetches a specific token balance for a given wallet
+ */
+export async function getTokenBalance(walletAddress: string, mintAddress: string) {
+  const response = await fetch(HELIUS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'solana-token-checker-balance',
+      method: 'searchAssets',
+      params: {
+        ownerAddress: walletAddress,
+        tokenAddress: mintAddress, // Helius API calls this 'tokenAddress'
+        page: 1,
+        limit: 1,
+      },
+    }),
+  });
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Helius searchAssets error: ${data.error.message}`);
+  }
+
+  if (data.result.items.length === 0) {
+    // No asset found, user has 0
+    return { balance: 0, uiAmount: 0 };
+  }
+
+  const asset = data.result.items[0];
+  return {
+    balance: asset.token_info.balance,
+    uiAmount: asset.token_info.balance_ui, // The human-readable amount
+  };
+}

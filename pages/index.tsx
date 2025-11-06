@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // <-- Import useEffect
 import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
 
 // --- IMPORTS ---
+import { useWallet } from '@solana/wallet-adapter-react'; // <-- Import useWallet
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { motion, AnimatePresence } from 'framer-motion'; // For animations
+import { motion, AnimatePresence } from 'framer-motion'; 
 // -----------------
 
 const inter = Inter({ subsets: ['latin'] });
@@ -58,7 +59,7 @@ function calculateSafetyScore(report: Report): SafetyScore {
     report.freezeAuthority,
     report.holderDistribution,
     report.metadata,
-    report.liquidity, // This is our stubbed 'warn' check
+    report.liquidity, 
   ];
 
   for (const check of checks) {
@@ -67,7 +68,6 @@ function calculateSafetyScore(report: Report): SafetyScore {
     } else if (check.status === 'warn') {
       score += 10;
     }
-    // 'fail' adds 0
   }
 
   let color: string;
@@ -95,11 +95,18 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- NEW: Balance State ---
+  const [userBalance, setUserBalance] = useState<number | null>(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
+  const { publicKey } = useWallet(); // Get the connected wallet's public key
+  // -------------------------
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setReport(null);
     setError(null);
+    setUserBalance(null); // Clear old balance on new search
     try {
       const response = await fetch(`/api/check/${mintAddress}`);
       if (!response.ok) {
@@ -120,6 +127,30 @@ export default function Home() {
       setIsLoading(false);
     }
   };
+
+  // --- NEW: useEffect to fetch balance ---
+  useEffect(() => {
+    // If we have a wallet and a report
+    if (publicKey && report) {
+      const fetchBalance = async () => {
+        setIsBalanceLoading(true);
+        try {
+          const response = await fetch(`/api/balance?wallet=${publicKey.toBase58()}&mint=${mintAddress}`);
+          if (response.ok) {
+            const data = await response.json();
+            setUserBalance(data.uiAmount);
+          }
+        } catch (err) {
+          console.error("Failed to fetch balance:", err);
+        } finally {
+          setIsBalanceLoading(false);
+        }
+      };
+      
+      fetchBalance();
+    }
+  }, [publicKey, report, mintAddress]); // Re-run when these change
+  // --------------------------------------
 
   return (
     <>
@@ -166,7 +197,14 @@ export default function Home() {
           <div className="mt-8">
             <AnimatePresence>
               {error && <ErrorMessage message={error} />}
-              {report && <ReportCard report={report} mintAddress={mintAddress} />}
+              {report && (
+                <ReportCard 
+                  report={report} 
+                  mintAddress={mintAddress}
+                  userBalance={userBalance} // Pass balance data
+                  isBalanceLoading={isBalanceLoading} // Pass loading state
+                />
+              )}
               {!isLoading && !error && !report && <InfoBox />}
             </AnimatePresence>
           </div>
@@ -195,28 +233,18 @@ const Card: React.FC<{ children: React.ReactNode, className?: string, style?: Re
 };
 
 
-// --- Safety Meter ---
+// --- Safety Meter (Unchanged) ---
 const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   const circumference = 2 * Math.PI * 60; // 2 * pi * radius
   const offset = circumference - (score / 100) * circumference;
 
   return (
-    // --- FIX #2: Removed 'h-full' from className ---
     <Card className="" style={{ boxShadow: `0 0 25px ${color}30` }}>
       <h3 className="text-lg font-semibold text-gray-300 mb-4 text-center">Safety Score</h3>
       <div className="flex flex-col items-center justify-center">
         <div className="relative w-40 h-40">
           <svg className="w-full h-full" viewBox="0 0 140 140">
-            {/* Background Circle */}
-            <circle
-              cx="70"
-              cy="70"
-              r="60"
-              stroke="#374151" // gray-700
-              strokeWidth="12"
-              fill="transparent"
-            />
-            {/* Progress Circle */}
+            <circle cx="70" cy="70" r="60" stroke="#374151" strokeWidth="12" fill="transparent" />
             <motion.circle
               cx="70"
               cy="70"
@@ -253,11 +281,48 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
+// --- NEW: User Balance Card ---
+const UserBalanceCard = ({ balance, isLoading, symbol }: { balance: number | null, isLoading: boolean, symbol: string }) => {
+  let content = null;
+
+  if (isLoading) {
+    content = <div className="text-2xl font-bold text-gray-400 animate-pulse">Loading...</div>;
+  } else if (balance !== null) {
+    // Format the balance to a reasonable number of decimals
+    const formattedBalance = balance > 1000 ? formatNumber(balance) : balance.toFixed(4);
+    content = (
+      <div className="text-2xl font-bold text-white">
+        {formattedBalance} <span className="text-lg text-gray-400">{symbol}</span>
+      </div>
+    );
+  } else {
+    content = <div className="text-lg text-gray-500">Connect wallet to see balance</div>;
+  }
+
+  return (
+    <Card>
+      <h3 className="text-lg font-semibold text-gray-300 mb-2 text-center">My Balance</h3>
+      <div className="flex items-center justify-center h-16">
+        {content}
+      </div>
+    </Card>
+  );
+};
+
 
 // --- Report Card (Main Layout) ---
-const ReportCard = ({ report, mintAddress }: { report: Report, mintAddress: string }) => {
+const ReportCard = ({ 
+  report, 
+  mintAddress, 
+  userBalance, 
+  isBalanceLoading 
+}: { 
+  report: Report, 
+  mintAddress: string,
+  userBalance: number | null,
+  isBalanceLoading: boolean
+}) => {
   const safetyScore = calculateSafetyScore(report);
-  
   const raydiumUrl = `https://raydium.io/swap/?outputMint=${mintAddress}`;
   const birdeyeUrl = `https://birdeye.so/token/${mintAddress}`;
 
@@ -270,7 +335,6 @@ const ReportCard = ({ report, mintAddress }: { report: Report, mintAddress: stri
       {/* Header Card */}
       <Card className="mb-6">
         <h2 className="text-3xl font-bold text-center mb-4">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
-        
         <div className="flex flex-wrap gap-2 justify-center mb-4">
           <a href={raydiumUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition-colors">
             Buy on Raydium
@@ -279,15 +343,21 @@ const ReportCard = ({ report, mintAddress }: { report: Report, mintAddress: stri
             View on Birdeye
           </a>
         </div>
-        
         <SocialLinks links={report.tokenInfo.links} />
       </Card>
 
-      {/* --- FIX #1: Added 'lg:items-start' to the grid container --- */}
+      {/* 2-Column Dashboard Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
         
         {/* --- Sidebar (Column 1) --- */}
         <div className="lg:col-span-1 space-y-6">
+          {/* --- ADDED USER BALANCE CARD --- */}
+          <UserBalanceCard 
+            balance={userBalance} 
+            isLoading={isBalanceLoading} 
+            symbol={report.tokenInfo.symbol} 
+          />
+          {/* ----------------------------- */}
           <SafetyMeter key={safetyScore.score} {...safetyScore} />
           <Card>
             <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
@@ -318,27 +388,20 @@ const ReportCard = ({ report, mintAddress }: { report: Report, mintAddress: stri
   );
 };
 
-// --- DexScreener Chart ---
+// --- DexScreener Chart (Unchanged) ---
 const DexScreenerChart = ({ pair }: { pair: any }) => {
   if (!pair?.url) {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
-  
   const chartUrl = `${pair.url.replace('/dex/', '/embed/')}?theme=dark&info=false`;
-
   return (
     <div className="w-full h-[400px] md:h-[500px] rounded-lg overflow-hidden border border-gray-700">
-      <iframe
-        src={chartUrl}
-        className="w-full h-full"
-        title="DexScreener Chart"
-        allow="fullscreen"
-      />
+      <iframe src={chartUrl} className="w-full h-full" title="DexScreener Chart" allow="fullscreen" />
     </div>
   );
 };
 
-// --- Market Data ---
+// --- Market Data (Unchanged) ---
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No market data found for this token.</p>;
@@ -348,54 +411,21 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
   const priceChange = pair.priceChange?.h24 || 0;
   return (
     <div className="grid grid-cols-2 gap-4">
-      <StatCard 
-        title="Price USD" 
-        value={formatUSD(pair.priceUsd)}
-        change={priceChange}
-      />
-      <StatCard 
-        title={`Price ${pair.quoteToken.symbol}`}
-        value={formatNativePrice(pair.priceNative)} 
-      />
-      <StatCard 
-        title="Market Cap" 
-        value={marketCap > 0 ? formatUSD(marketCap) : 'N/A'}
-        tooltip="Market Cap provided by Helius"
-      />
-      <StatCard 
-        title="FDV" 
-        value={formatUSD(pair.fdv)}
-        tooltip="Fully Diluted Valuation from DexScreener"
-      />
-      <StatCard 
-        title="Liquidity" 
-        value={formatUSD(pair.liquidity.usd)}
-      />
-      <StatCard 
-        title="24h Volume" 
-        value={formatUSD(volume)}
-      />
-      <StatCard 
-        title="24h Transactions" 
-        value={formatNumber(txns.buys + txns.sells)}
-      />
-      <StatCard 
-        title="Buys vs Sells (24h)" 
-        value={`${formatNumber(txns.buys)} / ${formatNumber(txns.sells)}`}
-      />
-      <StatCard 
-        title="Pair Created" 
-        value={formatDate(pair.pairCreatedAt)}
-      />
-      <StatCard 
-        title="Pair Address" 
-        value={`${pair.pairAddress.substring(0, 4)}...${pair.pairAddress.substring(pair.pairAddress.length - 4)}`}
-      />
+      <StatCard title="Price USD" value={formatUSD(pair.priceUsd)} change={priceChange} />
+      <StatCard title={`Price ${pair.quoteToken.symbol}`} value={formatNativePrice(pair.priceNative)} />
+      <StatCard title="Market Cap" value={marketCap > 0 ? formatUSD(marketCap) : 'N/A'} tooltip="Market Cap provided by Helius" />
+      <StatCard title="FDV" value={formatUSD(pair.fdv)} tooltip="Fully Diluted Valuation from DexScreener" />
+      <StatCard title="Liquidity" value={formatUSD(pair.liquidity.usd)} />
+      <StatCard title="24h Volume" value={formatUSD(volume)} />
+      <StatCard title="24h Transactions" value={formatNumber(txns.buys + txns.sells)} />
+      <StatCard title="Buys vs Sells (24h)" value={`${formatNumber(txns.buys)} / ${formatNumber(txns.sells)}`} />
+      <StatCard title="Pair Created" value={formatDate(pair.pairCreatedAt)} />
+      <StatCard title="Pair Address" value={`${pair.pairAddress.substring(0, 4)}...${pair.pairAddress.substring(pair.pairAddress.length - 4)}`} />
     </div>
   );
 };
 
-// --- Stat Card ---
+// --- Stat Card (Unchanged) ---
 const StatCard = ({ title, value, change, tooltip }: { title: string, value: string, change?: number, tooltip?: string }) => (
   <div className="bg-gray-700/50 p-4 rounded-lg" title={tooltip}>
     <p className="text-sm text-gray-400 truncate">{title}</p>
@@ -410,17 +440,12 @@ const StatCard = ({ title, value, change, tooltip }: { title: string, value: str
   </div>
 );
 
-// --- Social Links ---
+// --- Social Links (Unchanged) ---
 const SocialLinks = ({ links }: { links: any }) => {
   const createLink = (name: string, url: string) => {
     if (!url) return null;
     return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-sm hover:bg-gray-600 transition-colors"
-      >
+      <a href={url} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-sm hover:bg-gray-600 transition-colors">
         {name}
       </a>
     );
@@ -437,13 +462,12 @@ const SocialLinks = ({ links }: { links: any }) => {
   return <div className="flex flex-wrap gap-2 justify-center">{allLinks}</div>;
 };
 
-// --- Report Item ---
+// --- Report Item (Unchanged) ---
 const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
   const { message } = item;
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
   let textColor = 'text-green-400';
   if (icon === '⚠️') textColor = 'text-yellow-400';
-  // --- FIX #3: Corrected typo 'text-red-4E00' to 'text-red-400' ---
   if (icon === '❌') textColor = 'text-red-400'; 
   return (
     <div className={`flex items-start ${textColor} p-3 rounded-lg transition-colors hover:bg-gray-700/50`}>
@@ -453,7 +477,7 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   );
 };
 
-// --- Disclaimer ---
+// --- Disclaimer (Unchanged) ---
 const Disclaimer = () => (
   <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100 max-w-4xl mx-auto">
     <h3 className="font-bold text-lg mb-2">⚠️ THIS IS NOT FINANCIAL ADVICE</h3>
@@ -466,20 +490,16 @@ const Disclaimer = () => (
   </div>
 );
 
-// --- Error Message ---
+// --- Error Message (Unchanged) ---
 const ErrorMessage = ({ message }: { message: string }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0 }}
-  >
+  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
     <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100 max-w-2xl mx-auto">
       <p><strong>Error:</strong> {message}</p>
     </div>
   </motion.div>
 );
 
-// --- Info Box ---
+// --- Info Box (Unchanged) ---
 const InfoBox = () => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
