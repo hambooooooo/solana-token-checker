@@ -2,40 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Apply a sleek, dark gradient background */
+/* Your custom styles go AFTER the imports */
 body {
   @apply bg-gray-900;
   background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
   background-size: 20px 20px;
 }
 
-/* --- NEW: Style the Solana Wallet Button --- */
+/* --- Wallet Button Styles (No changes) --- */
 
-/* Base button style */
 .wallet-adapter-button {
   @apply px-4 py-2 rounded-md font-semibold transition-all duration-200;
   background-color: #7c3aed !important; /* Purple-600 */
   color: #ffffff !important;
 }
 
-/* Hover state */
 .wallet-adapter-button:hover {
   background-color: #6d28d9 !important; /* Purple-700 */
 }
 
-/* Icon style */
 .wallet-adapter-button-icon img {
   width: 20px;
   height: 20px;
 }
 
-/* Dropdown menu */
 .wallet-adapter-dropdown-list {
   background: #1f2937 !important; /* gray-800 */
   border: 1px solid #374151 !important; /* gray-700 */
 }
 
-/* Dropdown items */
 .wallet-adapter-dropdown-list-item {
   color: #f3f4f6 !important; /* gray-100 */
 }
@@ -43,7 +38,6 @@ body {
   background: #374151 !important; /* gray-700 */
 }
 
-/* Modal */
 .wallet-adapter-modal-wrapper {
   background-color: rgba(0, 0, 0, 0.7) !important;
   backdrop-filter: blur(4px);
