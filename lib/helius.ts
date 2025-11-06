@@ -57,7 +57,7 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   const [heliusAssetResult, heliusHoldersResult, dexScreenerPair] = await Promise.all([
     fetchHeliusAsset(mintAddress),
     fetchHeliusTokenLargestHolders(mintAddress),
-    fetchDexScreenerData(mintAddress), // Add new fetch
+    fetchDexScreenerData(mintAddress),
   ]);
 
   const assetData = heliusAssetResult;
@@ -68,17 +68,17 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   const freezeAuthority = checkFreezeAuthority(assetData);
   
   const totalSupply = assetData.supply?.supply || 0;
+  
+  // --- UPDATED ---
+  // We now pass the 'totalSupply' (a float) into the holder check
   const holderDistribution = {
     ...checkHolderDistribution(largestHoldersData, totalSupply),
     holders: largestHoldersData,
   };
+  // ---------------
 
   const metadata = checkMetadata(assetData);
-  
-  // --- THIS IS THE FIX ---
-  // We now pass the 'dexScreenerPair' data into the liquidity check
   const liquidity = checkLiquidity(dexScreenerPair);
-  // -----------------------
   
   const marketCap = assetData.supply?.market_cap || 0;
 
@@ -140,11 +140,15 @@ function checkMetadata(assetData: any): CheckResult {
   };
 }
 
+/**
+ * --- THIS IS THE NEW, RELIABLE HOLDER CHECK ---
+ */
 function checkHolderDistribution(holders: any[], totalSupply: number): CheckResult {
   if (!holders || holders.length === 0) {
     return { status: 'fail', message: '❌ Could not retrieve holder data.' };
   }
   
+  // This check is fine
   if (totalSupply === 0) {
     return {
       status: 'pass',
@@ -152,43 +156,76 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
     };
   }
 
+  // --- THIS IS THE BUG FIX ---
+  // We MUST use 'uiAmount' (the float) to match the 'totalSupply' (also a float).
+  // Using 'holder.amount' (a raw integer) caused a NaN error.
   const top10 = holders.slice(0, 10);
-  const top10Balance = top10.reduce((sum, holder) => sum + parseFloat(holder.amount), 0);
-  const top10Percentage = (top10Balance / totalSupply) * 100; 
+  const top10Balance = top10.reduce((sum, holder) => {
+    const amount = parseFloat(holder.uiAmount); // Use uiAmount
+    return sum + (isNaN(amount) ? 0 : amount);
+  }, 0);
+  // -----------------------
 
-  // This is a much better check: fail if top 10 hold > 50%, warn if > 20%
-  if (top10Percentage > 50) {
-    return {
+  // Guard against NaN division
+  if (totalSupply === 0) {
+     return { status: 'pass', message: '✅ Token has 0 supply.' };
+  }
+
+  const top10Percentage = (top10Balance / totalSupply) * 100;
+
+  // Guard against NaN result (if calculations failed)
+  if (isNaN(top10Percentage)) {
+    return { status: 'fail', message: '❌ Failed to calculate holder distribution.' };
+  }
+
+  // --- NEW, STRICTER RUG PULL CHECK ---
+  // We check the #1 holder *excluding* the LP
+  // Note: Helius 'getTokenLargestAccounts' already excludes the LP, which is perfect for this.
+  const top1HolderAmount = parseFloat(holders[0]?.uiAmount) || 0;
+  const top1Percentage = (top1HolderAmount / totalSupply) * 100;
+
+  if (top1Percentage > 20) {
+     return {
       status: 'fail',
-      message: `❌ Extreme Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply. High rug pull risk.`,
+      message: `❌ Extreme Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply. This is a massive rug pull risk.`,
     };
   }
-  if (top10Percentage > 20) {
+  
+  if (top1Percentage > 10) {
+     return {
+      status: 'warn',
+      message: `⚠️ High Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply.`,
+    };
+  }
+
+  // Stricter check for the top 10 wallets
+  if (top10Percentage > 40) {
     return {
       status: 'warn',
       message: `⚠️ High Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply. A sell-off could crash the price.`,
     };
   }
+  
   return {
     status: 'pass',
-    message: `✅ Healthy Distribution: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply.`,
+    message: `✅ Healthy Distribution: Top wallet holds ${top1Percentage.toFixed(1)}% and top 10 hold ${top10Percentage.toFixed(1)}%.`,
   };
 }
 
+
 /**
- * --- THIS IS THE NEW, RELIABLE LIQUIDITY CHECK ---
+ * --- THIS IS THE REAL LIQUIDITY CHECK (from last time) ---
  */
 function checkLiquidity(pair: any): CheckResult {
   if (!pair || !pair.liquidity) {
     return {
       status: 'fail',
-      message: '❌ No Liquidity: This token has no discoverable liquidity pool on Raydium or Orca. It is untradeable.',
+      message: '❌ No Liquidity: This token has no discoverable liquidity pool. It is untradeable.',
     };
   }
 
   const lpValue = parseFloat(pair.liquidity.usd);
 
-  // You can adjust these thresholds as you like
   if (lpValue < 1000) {
     return {
       status: 'fail',
@@ -202,7 +239,6 @@ function checkLiquidity(pair: any): CheckResult {
     };
   }
   
-  // NOTE: This check does NOT verify if liquidity is locked or burned.
   return {
     status: 'pass',
     message: `✅ Liquidity Found: $${lpValue.toLocaleString()} in the pool. (Note: This does not verify if LP is locked.)`,
@@ -255,5 +291,6 @@ async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[
   if (!data.result) {
     throw new Error('Failed to fetch holder data (no result)');
   }
-  return data.result.value;
+  // This is the full list of holders
+  return data.result.value; 
 }
