@@ -274,4 +274,60 @@ const SocialLinks = ({ links }: { links: any }) => {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className
+        className="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-sm hover:bg-gray-600 transition-colors"
+      >
+        {name}
+      </a>
+    );
+  };
+  const allLinks = [
+    createLink('Website', links.website),
+    createLink('Twitter', links.twitter),
+    createLink('Telegram', links.telegram),
+    createLink('Discord', links.discord),
+  ].filter(Boolean); 
+  if (allLinks.length === 0) {
+    return <p className="text-sm text-gray-500">No official links found.</p>;
+  }
+  return <div className="flex flex-wrap gap-2">{allLinks}</div>;
+};
+
+const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
+  const { message } = item;
+  const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
+  let textColor = 'text-green-400';
+  if (icon === '⚠️') textColor = 'text-yellow-400';
+  if (icon === '❌') textColor = 'text-red-400';
+  return (
+    <div className={`flex items-start ${textColor}`}>
+      <span className="text-xl mr-3">{icon}</span>
+      <p className="text-gray-100">{message.substring(2)}</p>
+    </div>
+  );
+};
+
+const Disclaimer = () => (
+  <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100">
+    <h3 className="font-bold text-lg mb-2">⚠️ THIS IS NOT FINANCIAL ADVICE</h3>
+    <p className="text-sm">
+      This is an automated tool and not an endorsement. A high safety score does
+      not guarantee a good investment. Many 'safe' tokens still fail. 'Unsafe'
+      tokens may be for legitimate, in-progress projects. Always do your
+      own research (DYOR).
+    </p>
+  </div>
+);
+
+const ErrorMessage = ({ message }: { message: string }) => (
+  <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100">
+    <p><strong>Error:</strong> {message}</p>
+  </div>
+);
+
+const InfoBox = () => (
+  <div className="p-8 text-center bg-gray-800 border border-gray-700 rounded-lg">
+    <p className="text-gray-400">
+      Your token report will appear here.
+    </p>
+  </div>
+);
