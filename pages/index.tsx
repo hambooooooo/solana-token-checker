@@ -3,7 +3,7 @@ import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
 
-// --- NEW IMPORTS ---
+// --- IMPORTS ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion, AnimatePresence } from 'framer-motion'; // For animations
 // -----------------
@@ -44,7 +44,7 @@ function formatDate(timestamp: number): string {
 }
 // -----------------------------
 
-// --- NEW: SAFETY SCORING LOGIC ---
+// --- SAFETY SCORING LOGIC (Unchanged) ---
 type SafetyScore = {
   score: number;
   color: string;
@@ -136,7 +136,7 @@ export default function Home() {
       </header>
 
       <div className={`flex flex-col items-center min-h-screen text-white p-4 md:p-8 ${inter.className}`}>
-        <main className="w-full max-w-6xl"> {/* <-- Increased max-width */}
+        <main className="w-full max-w-7xl"> {/* <-- Increased max-width */}
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2">
             Token Dashboard
           </h2>
@@ -166,7 +166,8 @@ export default function Home() {
           <div className="mt-8">
             <AnimatePresence>
               {error && <ErrorMessage message={error} />}
-              {report && <ReportCard report={report} />}
+              {/* --- We now pass the mintAddress to the report card --- */}
+              {report && <ReportCard report={report} mintAddress={mintAddress} />}
               {!isLoading && !error && !report && <InfoBox />}
             </AnimatePresence>
           </div>
@@ -178,123 +179,154 @@ export default function Home() {
   );
 }
 
-// --- NEW: ANIMATION WRAPPER ---
-const AnimatedCard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// --- NEW: Card component for layout ---
+const Card: React.FC<{ children: React.ReactNode, className?: string, style?: React.CSSProperties }> = 
+  ({ children, className = '', style }) => {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      className={`bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6 ${className}`}
+      style={style}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
     >
       {children}
     </motion.div>
   );
 };
 
-// --- NEW: SAFETY METER COMPONENT ---
+
+// --- FIXED: SAFETY METER COMPONENT ---
 const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   const circumference = 2 * Math.PI * 60; // 2 * pi * radius
+  
+  // --- THIS IS THE FIX ---
+  // We calculate the part of the circle to *fill*, not the empty part.
   const offset = circumference - (score / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-gray-800 rounded-lg border border-gray-700 h-full">
-      <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Score</h3>
-      <div className="relative w-40 h-40">
-        <svg className="w-full h-full" viewBox="0 0 140 140">
-          {/* Background Circle */}
-          <circle
-            cx="70"
-            cy="70"
-            r="60"
-            stroke="#374151" // gray-700
-            strokeWidth="12"
-            fill="transparent"
-          />
-          {/* Progress Circle */}
-          <motion.circle
-            cx="70"
-            cy="70"
-            r="60"
-            stroke={color}
-            strokeWidth="12"
-            fill="transparent"
-            strokeLinecap="round"
-            transform="rotate(-90 70 70)"
-            style={{ strokeDasharray: circumference, strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset: offset }}
-            transition={{ duration: 1, ease: "easeOut" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <motion.span
-            className="text-4xl font-bold"
-            style={{ color: color }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-          >
-            {score}
-          </motion.span>
-          <span className="text-sm text-gray-400">/ 100</span>
+    // We add the 'glowing' shadow effect here
+    <Card className="h-full" style={{ boxShadow: `0 0 25px ${color}30` }}>
+      <h3 className="text-lg font-semibold text-gray-300 mb-4 text-center">Safety Score</h3>
+      <div className="flex flex-col items-center justify-center">
+        <div className="relative w-40 h-40">
+          <svg className="w-full h-full" viewBox="0 0 140 140">
+            {/* Background Circle */}
+            <circle
+              cx="70"
+              cy="70"
+              r="60"
+              stroke="#374151" // gray-700
+              strokeWidth="12"
+              fill="transparent"
+            />
+            {/* --- THIS IS THE ANIMATION FIX --- */}
+            <motion.circle
+              cx="70"
+              cy="70"
+              r="60"
+              stroke={color}
+              strokeWidth="12"
+              fill="transparent"
+              strokeLinecap="round"
+              transform="rotate(-90 70 70)"
+              strokeDasharray={circumference}
+              // 1. We explicitly set the 'initial' state
+              initial={{ strokeDashoffset: circumference }}
+              // 2. We animate to the 'offset'
+              animate={{ strokeDashoffset: offset }}
+              // 3. We add a delay and better easing for the "jazz"
+              transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-4xl font-bold" style={{ color: color }}>
+              {score}
+            </span>
+            <span className="text-sm text-gray-400">/ 100</span>
+          </div>
         </div>
+        <motion.div
+          className="mt-4 px-4 py-1.5 rounded-full text-lg font-semibold"
+          style={{ backgroundColor: `${color}20`, color: color }}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 1 }}
+        >
+          {rating}
+        </motion.div>
       </div>
-      <motion.div
-        className="mt-4 px-4 py-1.5 rounded-full text-lg font-semibold"
-        style={{ backgroundColor: `${color}20`, color: color }} // 20 = 12.5% opacity
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.7 }}
-      >
-        {rating}
-      </motion.div>
-    </div>
+    </Card>
   );
 };
 
 
-// --- UPDATED: REPORT CARD (NOW A 2-COLUMN GRID) ---
-const ReportCard = ({ report }: { report: Report }) => {
+// --- UPDATED: REPORT CARD (NEW 2-COLUMN LAYOUT) ---
+const ReportCard = ({ report, mintAddress }: { report: Report, mintAddress: string }) => {
   const safetyScore = calculateSafetyScore(report);
   
+  // --- NEW: Add useful links ---
+  const raydiumUrl = `https://raydium.io/swap/?outputMint=${mintAddress}`;
+  const birdeyeUrl = `https://birdeye.so/token/${mintAddress}`;
+
   return (
-    <AnimatedCard>
-      {/* Header */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden p-4 md:p-6 mb-6">
-        <h2 className="text-3xl font-bold text-center mb-4">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
-        <SocialLinks links={report.tokenInfo.links} />
-      </div>
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        {/* Header Card */}
+        <Card className="mb-6">
+          <h2 className="text-3xl font-bold text-center mb-4">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
+          
+          {/* --- NEW: Buy/Link buttons --- */}
+          <div className="flex flex-wrap gap-2 justify-center mb-4">
+            <a href={raydiumUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition-colors">
+              Buy on Raydium
+            </a>
+            <a href={birdeyeUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition-colors">
+              View on Birdeye
+            </a>
+          </div>
+          
+          <SocialLinks links={report.tokenInfo.links} />
+        </Card>
 
-      {/* 2-Column Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Column 1: Meter & Market Data */}
-        <div className="space-y-6">
-          <SafetyMeter {...safetyScore} />
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6">
-            <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
-            <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
+        {/* --- NEW: 2-Column Dashboard Layout --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* --- Sidebar (Column 1) --- */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* We add a key to force re-render/re-animate on new search */}
+            <SafetyMeter key={safetyScore.score} {...safetyScore} />
+            <Card>
+              <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
+              <div className="space-y-3">
+                <ReportItem item={report.mintAuthority} />
+                <ReportItem item={report.freezeAuthority} />
+                <ReportItem item={report.holderDistribution} />
+                <ReportItem item={report.metadata} />
+                <ReportItem item={report.liquidity} />
+              </div>
+            </Card>
           </div>
-        </div>
 
-        {/* Column 2: Chart & Safety Details */}
-        <div className="space-y-6">
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6">
-            <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
-            <DexScreenerChart pair={report.dexScreenerPair} />
+          {/* --- Main Content (Column 2) --- */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
+              <DexScreenerChart pair={report.dexScreenerPair} />
+            </Card>
+            <Card>
+              <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
+              <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
+            </Card>
           </div>
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6">
-            <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Report Details</h3>
-            <div className="space-y-3">
-              <ReportItem item={report.mintAuthority} />
-              <ReportItem item={report.freezeAuthority} />
-              <ReportItem item={report.holderDistribution} />
-              <ReportItem item={report.metadata} />
-              <ReportItem item={report.liquidity} />
-            </div>
-          </div>
+
         </div>
-      </div>
-    </AnimatedCard>
+      </motion.div>
+    </AnimatePresence>
   );
 };
 
@@ -376,7 +408,7 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
 };
 
 const StatCard = ({ title, value, change, tooltip }: { title: string, value: string, change?: number, tooltip?: string }) => (
-  <div className="bg-gray-700 p-4 rounded-lg" title={tooltip}>
+  <div className="bg-gray-700/50 p-4 rounded-lg" title={tooltip}>
     <p className="text-sm text-gray-400 truncate">{title}</p>
     <div className="flex items-baseline gap-2">
       <p className="text-xl lg:text-2xl font-bold truncate">{value}</p>
@@ -421,7 +453,7 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
   let textColor = 'text-green-400';
   if (icon === '⚠️') textColor = 'text-yellow-400';
-  if (icon === '❌') textColor = 'text-red-400';
+  if (icon === '❌') textColor = 'text-red-4E00';
   return (
     <div className={`flex items-start ${textColor} p-3 rounded-lg transition-colors hover:bg-gray-700/50`}>
       <span className="text-xl mr-3 mt-0.5">{icon}</span>
@@ -443,11 +475,15 @@ const Disclaimer = () => (
 );
 
 const ErrorMessage = ({ message }: { message: string }) => (
-  <AnimatedCard>
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0 }}
+  >
     <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100 max-w-2xl mx-auto">
       <p><strong>Error:</strong> {message}</p>
     </div>
-  </AnimatedCard>
+  </motion.div>
 );
 
 const InfoBox = () => (
