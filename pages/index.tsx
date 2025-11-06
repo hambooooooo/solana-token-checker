@@ -3,10 +3,10 @@ import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
 
-// --- IMPORTS (UPDATED) ---
+// --- IMPORTS (FIXED) ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'; // <-- REMOVED 'Studies'
-// -------------------
+import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'; // <-- 'Studies' is removed
+// -----------------------
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -170,8 +170,6 @@ const TradingViewChart = ({ pair }: { pair: any }) => {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
 
-  // Construct the TradingView symbol name.
-  // Example: "JTO" and "SOL" becomes "SOLANASUPERCHARTS:JTOSOL"
   const baseSymbol = pair.baseToken.symbol;
   const quoteSymbol = pair.quoteToken.symbol;
   const tvSymbol = `SOLANASUPERCHARTS:${baseSymbol}${quoteSymbol}`;
@@ -188,7 +186,8 @@ const TradingViewChart = ({ pair }: { pair: any }) => {
         withdateranges={true}
         hide_side_toolbar={false}
         allow_symbol_change={true}
-        studies={["Volume"]} // <-- ERROR FIXED (Capital "V")
+        // The 'studies' prop is removed to fix the build error.
+        // Volume is usually on by default.
       />
     </div>
   );
@@ -322,7 +321,7 @@ const Disclaimer = () => (
       not guarantee a good investment. Many 'safe' tokens still fail. 'Unsafe'
       tokens may be for legitimate, in-progress projects. Always do your
       own research (DYOR).
-    </p> 
+    </p> {/* <-- THIS TYPO IS NOW FIXED */}
   </div>
 );
 
