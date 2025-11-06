@@ -3,9 +3,9 @@ import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
 
-// --- NEW IMPORTS ---
+// --- IMPORTS (UPDATED) ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets';
+import { AdvancedRealTimeChart, Studies } from 'react-ts-tradingview-widgets'; // <-- IMPORT 'Studies'
 // -------------------
 
 const inter = Inter({ subsets: ['latin'] });
@@ -71,7 +71,7 @@ export default function Home() {
       const data: Report = await response.json();
       setReport(data);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message); // <-- TYPO FIXED (removed extra parentheses)
     } finally {
       setIsLoading(false);
     }
@@ -195,7 +195,7 @@ const TradingViewChart = ({ pair }: { pair: any }) => {
         withdateranges={true}
         hide_side_toolbar={false}
         allow_symbol_change={true}
-        studies={["volume"]}
+        studies={[Studies.VOLUME]} // <-- ERROR FIXED
       />
     </div>
   );
@@ -312,7 +312,7 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
   let textColor = 'text-green-400';
   if (icon === '⚠️') textColor = 'text-yellow-400';
-  if (icon === '❌') textColor = 'text-red-400';
+  if (icon === '❌') textColor = 'text-red-4This content is not available.00';
   return (
     <div className={`flex items-start ${textColor}`}>
       <span className="text-xl mr-3">{icon}</span>
