@@ -171,11 +171,15 @@ const DexScreenerChart = ({ pair }: { pair: any }) => {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
   
-  // This is the clean, dark-mode, chart-only URL
-  const chartUrl = `${pair.url.replace('/dex/', '/embed/')}?theme=dark`;
+  // --- THE REAL FIX ---
+  // 1. We replace '/dex/' with '/embed/'
+  // 2. We add '?theme=dark' for the correct styling
+  // 3. We add '&info=false' to HIDE the info panel you hated
+  const chartUrl = `${pair.url.replace('/dex/', '/embed/')}?theme=dark&info=false`;
 
   return (
-    <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-700">
+    // We give it a large, fixed height to make it feel like a real dashboard
+    <div className="w-full h-[600px] rounded-lg overflow-hidden border border-gray-700">
       <iframe
         src={chartUrl}
         className="w-full h-full"
