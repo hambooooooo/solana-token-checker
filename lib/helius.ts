@@ -29,9 +29,7 @@ export type SafetyReport = {
 const HELIUS_API_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
 
 /**
- * --- NEW FUNCTION ---
  * Fetches market data from DexScreener
- * We add a try/catch block so if this fails, we still get the safety report.
  */
 async function fetchDexScreenerData(mintAddress: string) {
   try {
@@ -43,7 +41,6 @@ async function fetchDexScreenerData(mintAddress: string) {
     }
     const data = await response.json();
     // Return the first, most liquid pair.
-    // We can enhance this later to show all pairs.
     return data.pairs?.[0] || null;
   } catch (error) {
     console.error("Failed to fetch DexScreener data:", error);
@@ -57,15 +54,12 @@ async function fetchDexScreenerData(mintAddress: string) {
  */
 export async function getSafetyReport(mintAddress: string): Promise<SafetyReport> {
   
-  // --- UPDATED ---
-  // Run all our fetches in parallel
   const [heliusAssetResult, heliusHoldersResult, dexScreenerPair] = await Promise.all([
     fetchHeliusAsset(mintAddress),
     fetchHeliusTokenLargestHolders(mintAddress),
     fetchDexScreenerData(mintAddress), // Add new fetch
   ]);
 
-  // Use the results from the Helius fetches
   const assetData = heliusAssetResult;
   const largestHoldersData = heliusHoldersResult;
 
@@ -74,39 +68,38 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   const freezeAuthority = checkFreezeAuthority(assetData);
   
   const totalSupply = assetData.supply?.supply || 0;
-  // --- UPDATED: Pass holder data to frontend ---
   const holderDistribution = {
     ...checkHolderDistribution(largestHoldersData, totalSupply),
     holders: largestHoldersData,
   };
 
   const metadata = checkMetadata(assetData);
-  const liquidity = checkLiquidity(); // This is still a stubbed check
   
-  // --- NEW: Get Market Cap from Helius ---
+  // --- THIS IS THE FIX ---
+  // We now pass the 'dexScreenerPair' data into the liquidity check
+  const liquidity = checkLiquidity(dexScreenerPair);
+  // -----------------------
+  
   const marketCap = assetData.supply?.market_cap || 0;
 
   // --- Compile Final Report ---
   return {
-    // Safety Checks
     mintAuthority,
     freezeAuthority,
     holderDistribution,
     liquidity,
     metadata,
-    // Token Info
     tokenInfo: {
       name: assetData.content.metadata.name || 'Unknown',
       symbol: assetData.content.metadata.symbol || 'Unknown',
-      links: assetData.content.links || {}, // Pass social links
+      links: assetData.content.links || {},
     },
     marketCap,
-    // Market Data
-    dexScreenerPair: dexScreenerPair, // Pass all DexScreener data
+    dexScreenerPair: dexScreenerPair,
   };
 }
 
-// --- Individual Check Functions (No Changes) ---
+// --- Individual Check Functions ---
 
 function checkMintAuthority(assetData: any): CheckResult {
   if (assetData.ownership.mint_authority) {
@@ -138,7 +131,7 @@ function checkMetadata(assetData: any): CheckResult {
   if (assetData.mutable) {
     return {
       status: 'warn',
-      message: "⚠️ Metadata is Mutable: The creator can change the token's name and image (e.g., to impersonate another token).",
+      message: "⚠️ Metadata is Mutable: The creator can change the token's name and image.",
     };
   }
   return {
@@ -163,6 +156,13 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
   const top10Balance = top10.reduce((sum, holder) => sum + parseFloat(holder.amount), 0);
   const top10Percentage = (top10Balance / totalSupply) * 100; 
 
+  // This is a much better check: fail if top 10 hold > 50%, warn if > 20%
+  if (top10Percentage > 50) {
+    return {
+      status: 'fail',
+      message: `❌ Extreme Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply. High rug pull risk.`,
+    };
+  }
   if (top10Percentage > 20) {
     return {
       status: 'warn',
@@ -175,14 +175,42 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
   };
 }
 
-function checkLiquidity(): CheckResult {
+/**
+ * --- THIS IS THE NEW, RELIABLE LIQUIDITY CHECK ---
+ */
+function checkLiquidity(pair: any): CheckResult {
+  if (!pair || !pair.liquidity) {
+    return {
+      status: 'fail',
+      message: '❌ No Liquidity: This token has no discoverable liquidity pool on Raydium or Orca. It is untradeable.',
+    };
+  }
+
+  const lpValue = parseFloat(pair.liquidity.usd);
+
+  // You can adjust these thresholds as you like
+  if (lpValue < 1000) {
+    return {
+      status: 'fail',
+      message: `❌ Dangerously Low Liquidity: Only $${lpValue.toLocaleString()} in the pool. This is a high-risk rug pull.`,
+    };
+  }
+  if (lpValue < 10000) {
+    return {
+      status: 'warn',
+      message: `⚠️ Low Liquidity: Only $${lpValue.toLocaleString()} in the pool. Be cautious of high price impact (slippage).`,
+    };
+  }
+  
+  // NOTE: This check does NOT verify if liquidity is locked or burned.
   return {
-    status: 'warn',
-    message: '⚠️ LP Check Not Implemented: This tool does not check for locked liquidity. Always DYOR.',
+    status: 'pass',
+    message: `✅ Liquidity Found: $${lpValue.toLocaleString()} in the pool. (Note: This does not verify if LP is locked.)`,
   };
 }
 
-// --- Helius API Fetcher Functions (No Changes) ---
+
+// --- Helius API Fetcher Functions (Unchanged) ---
 
 async function fetchHeliusAsset(mintAddress: string): Promise<any> {
   const response = await fetch(HELIUS_API_URL, {
