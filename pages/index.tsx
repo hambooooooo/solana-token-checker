@@ -136,7 +136,7 @@ export default function Home() {
       </header>
 
       <div className={`flex flex-col items-center min-h-screen text-white p-4 md:p-8 ${inter.className}`}>
-        <main className="w-full max-w-7xl"> {/* <-- Increased max-width */}
+        <main className="w-full max-w-7xl">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2">
             Token Dashboard
           </h2>
@@ -166,7 +166,6 @@ export default function Home() {
           <div className="mt-8">
             <AnimatePresence>
               {error && <ErrorMessage message={error} />}
-              {/* --- We now pass the mintAddress to the report card --- */}
               {report && <ReportCard report={report} mintAddress={mintAddress} />}
               {!isLoading && !error && !report && <InfoBox />}
             </AnimatePresence>
@@ -179,7 +178,7 @@ export default function Home() {
   );
 }
 
-// --- NEW: Card component for layout ---
+// --- Card component (reusable) ---
 const Card: React.FC<{ children: React.ReactNode, className?: string, style?: React.CSSProperties }> = 
   ({ children, className = '', style }) => {
   return (
@@ -196,17 +195,14 @@ const Card: React.FC<{ children: React.ReactNode, className?: string, style?: Re
 };
 
 
-// --- FIXED: SAFETY METER COMPONENT ---
+// --- Safety Meter ---
 const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   const circumference = 2 * Math.PI * 60; // 2 * pi * radius
-  
-  // --- THIS IS THE FIX ---
-  // We calculate the part of the circle to *fill*, not the empty part.
   const offset = circumference - (score / 100) * circumference;
 
   return (
-    // We add the 'glowing' shadow effect here
-    <Card className="h-full" style={{ boxShadow: `0 0 25px ${color}30` }}>
+    // --- FIX #2: Removed 'h-full' from className ---
+    <Card className="" style={{ boxShadow: `0 0 25px ${color}30` }}>
       <h3 className="text-lg font-semibold text-gray-300 mb-4 text-center">Safety Score</h3>
       <div className="flex flex-col items-center justify-center">
         <div className="relative w-40 h-40">
@@ -220,7 +216,7 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
               strokeWidth="12"
               fill="transparent"
             />
-            {/* --- THIS IS THE ANIMATION FIX --- */}
+            {/* Progress Circle */}
             <motion.circle
               cx="70"
               cy="70"
@@ -231,11 +227,8 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
               strokeLinecap="round"
               transform="rotate(-90 70 70)"
               strokeDasharray={circumference}
-              // 1. We explicitly set the 'initial' state
               initial={{ strokeDashoffset: circumference }}
-              // 2. We animate to the 'offset'
               animate={{ strokeDashoffset: offset }}
-              // 3. We add a delay and better easing for the "jazz"
               transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
             />
           </svg>
@@ -261,76 +254,71 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
 };
 
 
-// --- UPDATED: REPORT CARD (NEW 2-COLUMN LAYOUT) ---
+// --- Report Card (Main Layout) ---
 const ReportCard = ({ report, mintAddress }: { report: Report, mintAddress: string }) => {
   const safetyScore = calculateSafetyScore(report);
   
-  // --- NEW: Add useful links ---
   const raydiumUrl = `https://raydium.io/swap/?outputMint=${mintAddress}`;
   const birdeyeUrl = `https://birdeye.so/token/${mintAddress}`;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
-        {/* Header Card */}
-        <Card className="mb-6">
-          <h2 className="text-3xl font-bold text-center mb-4">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
-          
-          {/* --- NEW: Buy/Link buttons --- */}
-          <div className="flex flex-wrap gap-2 justify-center mb-4">
-            <a href={raydiumUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition-colors">
-              Buy on Raydium
-            </a>
-            <a href={birdeyeUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition-colors">
-              View on Birdeye
-            </a>
-          </div>
-          
-          <SocialLinks links={report.tokenInfo.links} />
-        </Card>
-
-        {/* --- NEW: 2-Column Dashboard Layout --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* --- Sidebar (Column 1) --- */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* We add a key to force re-render/re-animate on new search */}
-            <SafetyMeter key={safetyScore.score} {...safetyScore} />
-            <Card>
-              <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
-              <div className="space-y-3">
-                <ReportItem item={report.mintAuthority} />
-                <ReportItem item={report.freezeAuthority} />
-                <ReportItem item={report.holderDistribution} />
-                <ReportItem item={report.metadata} />
-                <ReportItem item={report.liquidity} />
-              </div>
-            </Card>
-          </div>
-
-          {/* --- Main Content (Column 2) --- */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
-              <DexScreenerChart pair={report.dexScreenerPair} />
-            </Card>
-            <Card>
-              <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
-              <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
-            </Card>
-          </div>
-
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+    >
+      {/* Header Card */}
+      <Card className="mb-6">
+        <h2 className="text-3xl font-bold text-center mb-4">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
+        
+        <div className="flex flex-wrap gap-2 justify-center mb-4">
+          <a href={raydiumUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition-colors">
+            Buy on Raydium
+          </a>
+          <a href={birdeyeUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition-colors">
+            View on Birdeye
+          </a>
         </div>
-      </motion.div>
-    </AnimatePresence>
+        
+        <SocialLinks links={report.tokenInfo.links} />
+      </Card>
+
+      {/* --- FIX #1: Added 'lg:items-start' to the grid container --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+        
+        {/* --- Sidebar (Column 1) --- */}
+        <div className="lg:col-span-1 space-y-6">
+          <SafetyMeter key={safetyScore.score} {...safetyScore} />
+          <Card>
+            <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
+            <div className="space-y-3">
+              <ReportItem item={report.mintAuthority} />
+              <ReportItem item={report.freezeAuthority} />
+              <ReportItem item={report.holderDistribution} />
+              <ReportItem item={report.metadata} />
+              <ReportItem item={report.liquidity} />
+            </div>
+          </Card>
+        </div>
+
+        {/* --- Main Content (Column 2) --- */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
+            <DexScreenerChart pair={report.dexScreenerPair} />
+          </Card>
+          <Card>
+            <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
+            <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
+          </Card>
+        </div>
+
+      </div>
+    </motion.div>
   );
 };
 
-// --- UPDATED: DexScreener Chart (using correct embed) ---
+// --- DexScreener Chart ---
 const DexScreenerChart = ({ pair }: { pair: any }) => {
   if (!pair?.url) {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
@@ -350,7 +338,7 @@ const DexScreenerChart = ({ pair }: { pair: any }) => {
   );
 };
 
-
+// --- Market Data ---
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No market data found for this token.</p>;
@@ -407,6 +395,7 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
   );
 };
 
+// --- Stat Card ---
 const StatCard = ({ title, value, change, tooltip }: { title: string, value: string, change?: number, tooltip?: string }) => (
   <div className="bg-gray-700/50 p-4 rounded-lg" title={tooltip}>
     <p className="text-sm text-gray-400 truncate">{title}</p>
@@ -421,6 +410,7 @@ const StatCard = ({ title, value, change, tooltip }: { title: string, value: str
   </div>
 );
 
+// --- Social Links ---
 const SocialLinks = ({ links }: { links: any }) => {
   const createLink = (name: string, url: string) => {
     if (!url) return null;
@@ -447,13 +437,14 @@ const SocialLinks = ({ links }: { links: any }) => {
   return <div className="flex flex-wrap gap-2 justify-center">{allLinks}</div>;
 };
 
-// --- UPDATED: ReportItem (added hover effect) ---
+// --- Report Item ---
 const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
   const { message } = item;
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
   let textColor = 'text-green-400';
   if (icon === '⚠️') textColor = 'text-yellow-400';
-  if (icon === '❌') textColor = 'text-red-4E00';
+  // --- FIX #3: Corrected typo 'text-red-4E00' to 'text-red-400' ---
+  if (icon === '❌') textColor = 'text-red-400'; 
   return (
     <div className={`flex items-start ${textColor} p-3 rounded-lg transition-colors hover:bg-gray-700/50`}>
       <span className="text-xl mr-3 mt-0.5">{icon}</span>
@@ -462,6 +453,7 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   );
 };
 
+// --- Disclaimer ---
 const Disclaimer = () => (
   <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100 max-w-4xl mx-auto">
     <h3 className="font-bold text-lg mb-2">⚠️ THIS IS NOT FINANCIAL ADVICE</h3>
@@ -474,6 +466,7 @@ const Disclaimer = () => (
   </div>
 );
 
+// --- Error Message ---
 const ErrorMessage = ({ message }: { message: string }) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
@@ -486,10 +479,16 @@ const ErrorMessage = ({ message }: { message: string }) => (
   </motion.div>
 );
 
+// --- Info Box ---
 const InfoBox = () => (
-  <div className="p-12 text-center bg-gray-800 border border-gray-700 rounded-lg max-w-2xl mx-auto">
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0 }}
+    className="p-12 text-center bg-gray-800 border border-gray-700 rounded-lg max-w-2xl mx-auto"
+  >
     <p className="text-gray-400">
-      Your professional token report will appear here.
+      Enter a token address to begin your analysis.
     </p>
-  </div>
+  </motion.div>
 );
