@@ -180,7 +180,7 @@ const TradingViewChart = ({ pair }: { pair: any }) => {
         withdateranges={true}
         hide_side_toolbar={false}
         allow_symbol_change={true}
-        // 'studies' prop removed
+        // 'studies' prop removed to prevent build errors
       />
     </div>
   );

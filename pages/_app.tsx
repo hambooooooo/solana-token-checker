@@ -7,14 +7,19 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { useMemo } from 'react';
 
+// Import the wallet adapter's CSS
 require('@solana/wallet-adapter-react-ui/styles.css');
 
 export default function App({ Component, pageProps }: AppProps) {
   
   const network = WalletAdapterNetwork.Mainnet; 
   
-  // IMPORTANT: This key MUST start with NEXT_PUBLIC_
-  const endpoint = useMemo(() => `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`, []);
+  // This public key is for the FRONTEND
+  // It MUST start with NEXT_PUBLIC_
+  const endpoint = useMemo(
+    () => `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`, 
+    [] // Empty dependency array is correct here
+  );
 
   const wallets = useMemo(
     () => [
