@@ -3,10 +3,10 @@ import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
 
-// --- IMPORTS (FIXED) ---
+// --- IMPORTS ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'; // 'Studies' is removed
-// -----------------------
+// We no longer need the TradingView import
+// -----------------
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -142,7 +142,8 @@ const ReportCard = ({ report }: { report: Report }) => (
     </div>
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
-      <TradingViewChart pair={report.dexScreenerPair} />
+      {/* --- CHART COMPONENT SWAPPED BACK --- */}
+      <DexScreenerChart pair={report.dexScreenerPair} />
     </div>
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
@@ -161,30 +162,31 @@ const ReportCard = ({ report }: { report: Report }) => (
   </div>
 );
 
-const TradingViewChart = ({ pair }: { pair: any }) => {
-  if (!pair) {
+/**
+ * --- THIS IS THE FIXED DEXSCREENER CHART ---
+ * It uses the 'embed' URL and is styled to look professional.
+ */
+const DexScreenerChart = ({ pair }: { pair: any }) => {
+  if (!pair?.url) {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
-  const baseSymbol = pair.baseToken.symbol;
-  const quoteSymbol = pair.quoteToken.symbol;
-  const tvSymbol = `SOLANASUPERCHARTS:${baseSymbol}${quoteSymbol}`;
+  
+  // This is the clean, dark-mode, chart-only URL
+  const chartUrl = `${pair.url.replace('/dex/', '/embed/')}?theme=dark`;
+
   return (
-    <div className="aspect-video w-full">
-      <AdvancedRealTimeChart
-        theme="dark"
-        symbol={tvSymbol}
-        width="100%"
-        height="100%"
-        style="1"
-        timezone="Etc/UTC"
-        withdateranges={true}
-        hide_side_toolbar={false}
-        allow_symbol_change={true}
-        // 'studies' prop removed to prevent build errors
+    <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-700">
+      <iframe
+        src={chartUrl}
+        className="w-full h-full"
+        title="DexScreener Chart"
+        allow="fullscreen"
       />
     </div>
   );
 };
+
+// --- Other Components (Unchanged) ---
 
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
@@ -272,60 +274,4 @@ const SocialLinks = ({ links }: { links: any }) => {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-sm hover:bg-gray-600 transition-colors"
-      >
-        {name}
-      </a>
-    );
-  };
-  const allLinks = [
-    createLink('Website', links.website),
-    createLink('Twitter', links.twitter),
-    createLink('Telegram', links.telegram),
-    createLink('Discord', links.discord),
-  ].filter(Boolean); 
-  if (allLinks.length === 0) {
-    return <p className="text-sm text-gray-500">No official links found.</p>;
-  }
-  return <div className="flex flex-wrap gap-2">{allLinks}</div>;
-};
-
-const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
-  const { message } = item;
-  const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
-  let textColor = 'text-green-400';
-  if (icon === '⚠️') textColor = 'text-yellow-400';
-  if (icon === '❌') textColor = 'text-red-400';
-  return (
-    <div className={`flex items-start ${textColor}`}>
-      <span className="text-xl mr-3">{icon}</span>
-      <p className="text-gray-100">{message.substring(2)}</p>
-    </div>
-  );
-};
-
-const Disclaimer = () => (
-  <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100">
-    <h3 className="font-bold text-lg mb-2">⚠️ THIS IS NOT FINANCIAL ADVICE</h3>
-    <p className="text-sm">
-      This is an automated tool and not an endorsement. A high safety score does
-      not guarantee a good investment. Many 'safe' tokens still fail. 'Unsafe'
-      tokens may be for legitimate, in-progress projects. Always do your
-      own research (DYOR).
-    </p> {/* <-- TYPO FIXED */}
-  </div>
-);
-
-const ErrorMessage = ({ message }: { message: string }) => (
-  <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100">
-    <p><strong>Error:</strong> {message}</p>
-  </div>
-);
-
-const InfoBox = () => (
-  <div className="p-8 text-center bg-gray-800 border border-gray-700 rounded-lg">
-    <p className="text-gray-400">
-      Your token report will appear here.
-    </p>
-  </div>
-);
+        className

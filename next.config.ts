@@ -4,10 +4,8 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   
-  // This is the fix:
-  // It tells Next.js to compile these packages.
+  // We're only transpiling the wallet adapters now
   transpilePackages: [
-    'react-ts-tradingview-widgets',
     '@solana/wallet-adapter-base',
     '@solana/wallet-adapter-react',
     '@solana/wallet-adapter-react-ui',
