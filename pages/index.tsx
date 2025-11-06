@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 
 // --- IMPORTS (FIXED) ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'; // <-- 'Studies' is removed
+import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'; // 'Studies' is removed
 // -----------------------
 
 const inter = Inter({ subsets: ['latin'] });
@@ -161,19 +161,13 @@ const ReportCard = ({ report }: { report: Report }) => (
   </div>
 );
 
-/**
- * --- REPLACED COMPONENT ---
- * Displays a native TradingView Chart
- */
 const TradingViewChart = ({ pair }: { pair: any }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
-
   const baseSymbol = pair.baseToken.symbol;
   const quoteSymbol = pair.quoteToken.symbol;
   const tvSymbol = `SOLANASUPERCHARTS:${baseSymbol}${quoteSymbol}`;
-
   return (
     <div className="aspect-video w-full">
       <AdvancedRealTimeChart
@@ -186,14 +180,11 @@ const TradingViewChart = ({ pair }: { pair: any }) => {
         withdateranges={true}
         hide_side_toolbar={false}
         allow_symbol_change={true}
-        // The 'studies' prop is removed to fix the build error.
-        // Volume is usually on by default.
+        // 'studies' prop removed
       />
     </div>
   );
 };
-
-// --- Other Components (Unchanged) ---
 
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
@@ -321,7 +312,7 @@ const Disclaimer = () => (
       not guarantee a good investment. Many 'safe' tokens still fail. 'Unsafe'
       tokens may be for legitimate, in-progress projects. Always do your
       own research (DYOR).
-    </p> {/* <-- THIS TYPO IS NOW FIXED */}
+    </p> {/* <-- TYPO FIXED */}
   </div>
 );
 
