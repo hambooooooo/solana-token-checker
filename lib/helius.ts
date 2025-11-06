@@ -1,0 +1,183 @@
+import { PublicKey } from '@solana/web3.js';
+
+// Define the structure for a single check
+type CheckResult = {
+  status: 'pass' | 'fail' | 'warn';
+  message: string;
+};
+
+// Define the structure for the final, full report
+export type SafetyReport = {
+  mintAuthority: CheckResult;
+  freezeAuthority: CheckResult;
+  holderDistribution: CheckResult;
+  liquidity: CheckResult; // Note: This check is complex and will be marked as 'pass' for now
+  metadata: CheckResult;
+  tokenInfo: {
+    name: string;
+    symbol: string;
+  };
+};
+
+// Define the Helius API URL
+const HELIUS_API_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+
+/**
+ * Fetches and processes all token safety checks from Helius
+ * @param mintAddress The token mint address to check
+ */
+export async function getSafetyReport(mintAddress: string): Promise<SafetyReport> {
+  // We will run two major fetches in parallel
+  const [assetData, largestHoldersData] = await Promise.all([
+    fetchHeliusAsset(mintAddress),
+    fetchHeliusTokenLargestHolders(mintAddress),
+  ]);
+
+  // --- Run All Checks ---
+
+  // Check 1: Mint Authority
+  const mintAuthority = checkMintAuthority(assetData);
+
+  // Check 2: Freeze Authority
+  const freezeAuthority = checkFreezeAuthority(assetData);
+
+  // Check 3: Holder Distribution
+  const holderDistribution = checkHolderDistribution(largestHoldersData, assetData.supply.supply);
+
+  // Check 4: Metadata Mutability
+  const metadata = checkMetadata(assetData);
+
+  // Check 5: Liquidity (This is a complex, stubbed check as per the brief)
+  const liquidity = checkLiquidity();
+
+  // --- Compile Final Report ---
+  return {
+    mintAuthority,
+    freezeAuthority,
+    holderDistribution,
+    liquidity,
+    metadata,
+    tokenInfo: {
+      name: assetData.content.metadata.name || 'Unknown',
+      symbol: assetData.content.metadata.symbol || 'Unknown',
+    },
+  };
+}
+
+// --- Individual Check Functions ---
+
+function checkMintAuthority(assetData: any): CheckResult {
+  if (assetData.ownership.mint_authority) {
+    return {
+      status: 'fail',
+      message: '❌ Mint Authority Active: The creator can print infinite new tokens, devaluing your position.',
+    };
+  }
+  return {
+    status: 'pass',
+    message: '✅ Mint Authority Renounced: The creator cannot mint new tokens.',
+  };
+}
+
+function checkFreezeAuthority(assetData: any): CheckResult {
+  if (assetData.ownership.freeze_authority) {
+    return {
+      status: 'fail',
+      message: '❌ Freeze Authority Active: The creator can freeze this token in your wallet, making it untradeable.',
+    };
+  }
+  return {
+    status: 'pass',
+    message: '✅ Freeze Authority Renounced: The creator cannot freeze your tokens.',
+  };
+}
+
+function checkMetadata(assetData: any): CheckResult {
+  if (assetData.mutable) {
+    return {
+      status: 'warn',
+      message: "⚠️ Metadata is Mutable: The creator can change the token's name and image (e.g., to impersonate another token).",
+    };
+  }
+  return {
+    status: 'pass',
+    message: "✅ Metadata is Immutable: The token's name and image are permanent.",
+  };
+}
+
+function checkHolderDistribution(holders: any[], totalSupply: number): CheckResult {
+  if (!holders || holders.length === 0) {
+    return { status: 'fail', message: '❌ Could not retrieve holder data.' };
+  }
+
+  // Get the top 10 holders
+  const top10 = holders.slice(0, 10);
+
+  // Sum their balances (amount is a string, so we parse it)
+  const top10Balance = top10.reduce((sum, holder) => sum + parseFloat(holder.amount), 0);
+
+  const top10Percentage = (top10Balance / totalSupply) * 100;
+
+  if (top10Percentage > 20) {
+    return {
+      status: 'warn',
+      message: `⚠️ High Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply. A sell-off could crash the price.`,
+    };
+  }
+  return {
+    status: 'pass',
+    message: `✅ Healthy Distribution: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply.`,
+  };
+}
+
+function checkLiquidity(): CheckResult {
+  // NOTE: As per the brief, a true LP check is extremely complex.
+  // We will stub this check as "passing" for now.
+  // A real implementation would query Raydium/Orca pools.
+  return {
+    status: 'warn',
+    message: '⚠️ LP Check Not Implemented: This tool does not check for locked liquidity. Always DYOR.',
+  };
+}
+
+// --- Helius API Fetcher Functions ---
+
+/**
+ * Fetches the main asset data from Helius (Checks 1, 2, 4)
+ */
+async function fetchHeliusAsset(mintAddress: string): Promise<any> {
+  const response = await fetch(HELIUS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'solana-token-checker',
+      method: 'getAsset',
+      params: {
+        id: mintAddress,
+      },
+    }),
+  });
+  const data = await response.json();
+  if (!data.result) throw new Error('Failed to fetch asset data');
+  return data.result;
+}
+
+/**
+ * Fetches the top 20 largest token holders (Check 3)
+ */
+async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[]> {
+  const response = await fetch(HELIUS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'solana-token-checker',
+      method: 'getTokenLargestAccounts',
+      params: [mintAddress],
+    }),
+  });
+  const data = await response.json();
+  if (!data.result) throw new Error('Failed to fetch holder data');
+  return data.result.value;
+}
