@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 
 // --- IMPORTS (UPDATED) ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { AdvancedRealTimeChart, Studies } from 'react-ts-tradingview-widgets'; // <-- IMPORT 'Studies'
+import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'; // <-- REMOVED 'Studies'
 // -------------------
 
 const inter = Inter({ subsets: ['latin'] });
@@ -71,7 +71,7 @@ export default function Home() {
       const data: Report = await response.json();
       setReport(data);
     } catch (err: any) {
-      setError(err.message); // <-- TYPO FIXED (removed extra parentheses)
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -84,16 +84,13 @@ export default function Home() {
         <meta name="description" content="Check Solana SPL tokens for safety, market data, and charts." />
       </Head>
       
-      {/* --- ADDED A HEADER WITH WALLET BUTTON --- */}
       <header className="w-full p-4 flex justify-between items-center bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
         <h1 className="text-xl font-bold">Solana Token Analyzer</h1>
         <WalletMultiButton />
       </header>
-      {/* ----------------------------------------- */}
 
       <div className={`flex flex-col items-center min-h-screen bg-gray-900 text-white p-4 md:p-8 ${inter.className}`}>
         <main className="w-full max-w-4xl">
-          {/* 1. Header (Page Title) */}
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2">
             Token Dashboard
           </h2>
@@ -101,7 +98,6 @@ export default function Home() {
             Get safety checks, market data, and live charts for any SPL token.
           </p>
 
-          {/* 2. Input Form (No changes) */}
           <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-2 mb-4">
             <input
               type="text"
@@ -120,14 +116,12 @@ export default function Home() {
             </button>
           </form>
 
-          {/* 3. Results Area */}
           <div className="mt-6">
             {error && <ErrorMessage message={error} />}
             {report && <ReportCard report={report} />}
             {!isLoading && !error && !report && <InfoBox />}
           </div>
           
-          {/* 4. Disclaimer */}
           <Disclaimer />
         </main>
       </div>
@@ -148,7 +142,6 @@ const ReportCard = ({ report }: { report: Report }) => (
     </div>
     <div className="border-t border-gray-700 p-4 md:p-6">
       <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
-      {/* --- SWAPPED CHART COMPONENT --- */}
       <TradingViewChart pair={report.dexScreenerPair} />
     </div>
     <div className="border-t border-gray-700 p-4 md:p-6">
@@ -195,7 +188,7 @@ const TradingViewChart = ({ pair }: { pair: any }) => {
         withdateranges={true}
         hide_side_toolbar={false}
         allow_symbol_change={true}
-        studies={[Studies.VOLUME]} // <-- ERROR FIXED
+        studies={["Volume"]} // <-- ERROR FIXED (Capital "V")
       />
     </div>
   );
@@ -312,7 +305,7 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
   let textColor = 'text-green-400';
   if (icon === '⚠️') textColor = 'text-yellow-400';
-  if (icon === '❌') textColor = 'text-red-4This content is not available.00';
+  if (icon === '❌') textColor = 'text-red-400';
   return (
     <div className={`flex items-start ${textColor}`}>
       <span className="text-xl mr-3">{icon}</span>
