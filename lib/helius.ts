@@ -8,57 +8,105 @@ type CheckResult = {
 
 // Define the structure for the final, full report
 export type SafetyReport = {
+  // Safety Checks
   mintAuthority: CheckResult;
   freezeAuthority: CheckResult;
-  holderDistribution: CheckResult;
+  holderDistribution: CheckResult & { holders: any[] }; // Pass holders to frontend
   liquidity: CheckResult; 
   metadata: CheckResult;
+  // Token Info
   tokenInfo: {
     name: string;
     symbol: string;
+    links: any; // For social links
   };
+  marketCap: number; // Helius Market Cap
+  // DexScreener Data
+  dexScreenerPair: any; // This will hold all the "jazz"
 };
 
 // Define the Helius API URL
 const HELIUS_API_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
 
 /**
+ * --- NEW FUNCTION ---
+ * Fetches market data from DexScreener
+ * We add a try/catch block so if this fails, we still get the safety report.
+ */
+async function fetchDexScreenerData(mintAddress: string) {
+  try {
+    const url = `https://api.dexscreener.com/latest/dex/tokens/${mintAddress}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`DexScreener API request failed: ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    // Return the first, most liquid pair.
+    // We can enhance this later to show all pairs.
+    return data.pairs?.[0] || null;
+  } catch (error) {
+    console.error("Failed to fetch DexScreener data:", error);
+    return null;
+  }
+}
+
+/**
  * Fetches and processes all token safety checks from Helius
  * @param mintAddress The token mint address to check
  */
 export async function getSafetyReport(mintAddress: string): Promise<SafetyReport> {
-  const [assetData, largestHoldersData] = await Promise.all([
+  
+  // --- UPDATED ---
+  // Run all our fetches in parallel
+  const [heliusAssetResult, heliusHoldersResult, dexScreenerPair] = await Promise.all([
     fetchHeliusAsset(mintAddress),
     fetchHeliusTokenLargestHolders(mintAddress),
+    fetchDexScreenerData(mintAddress), // Add new fetch
   ]);
+
+  // Use the results from the Helius fetches
+  const assetData = heliusAssetResult;
+  const largestHoldersData = heliusHoldersResult;
 
   // --- Run All Checks ---
   const mintAuthority = checkMintAuthority(assetData);
   const freezeAuthority = checkFreezeAuthority(assetData);
   
-  // --- FIX 1: Safely get the total supply, default to 0 if null ---
   const totalSupply = assetData.supply?.supply || 0;
-  const holderDistribution = checkHolderDistribution(largestHoldersData, totalSupply);
-  // -----------------------------------------------------------------
+  // --- UPDATED: Pass holder data to frontend ---
+  const holderDistribution = {
+    ...checkHolderDistribution(largestHoldersData, totalSupply),
+    holders: largestHoldersData,
+  };
 
   const metadata = checkMetadata(assetData);
   const liquidity = checkLiquidity(); // This is still a stubbed check
+  
+  // --- NEW: Get Market Cap from Helius ---
+  const marketCap = assetData.supply?.market_cap || 0;
 
   // --- Compile Final Report ---
   return {
+    // Safety Checks
     mintAuthority,
     freezeAuthority,
     holderDistribution,
     liquidity,
     metadata,
+    // Token Info
     tokenInfo: {
       name: assetData.content.metadata.name || 'Unknown',
       symbol: assetData.content.metadata.symbol || 'Unknown',
+      links: assetData.content.links || {}, // Pass social links
     },
+    marketCap,
+    // Market Data
+    dexScreenerPair: dexScreenerPair, // Pass all DexScreener data
   };
 }
 
-// --- Individual Check Functions ---
+// --- Individual Check Functions (No Changes) ---
 
 function checkMintAuthority(assetData: any): CheckResult {
   if (assetData.ownership.mint_authority) {
@@ -104,18 +152,16 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
     return { status: 'fail', message: '❌ Could not retrieve holder data.' };
   }
   
-  // --- FIX 2: Handle 0 supply tokens gracefully ---
   if (totalSupply === 0) {
     return {
       status: 'pass',
       message: '✅ Token has 0 supply. Holder distribution is not applicable.',
     };
   }
-  // -----------------------------------------------
 
   const top10 = holders.slice(0, 10);
   const top10Balance = top10.reduce((sum, holder) => sum + parseFloat(holder.amount), 0);
-  const top10Percentage = (top10Balance / totalSupply) * 100; // This is now safe
+  const top10Percentage = (top10Balance / totalSupply) * 100; 
 
   if (top10Percentage > 20) {
     return {
@@ -130,14 +176,13 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
 }
 
 function checkLiquidity(): CheckResult {
-  // NOTE: This remains a stubbed check as per the brief.
   return {
     status: 'warn',
     message: '⚠️ LP Check Not Implemented: This tool does not check for locked liquidity. Always DYOR.',
   };
 }
 
-// --- Helius API Fetcher Functions ---
+// --- Helius API Fetcher Functions (No Changes) ---
 
 async function fetchHeliusAsset(mintAddress: string): Promise<any> {
   const response = await fetch(HELIUS_API_URL, {
