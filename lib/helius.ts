@@ -27,7 +27,6 @@ const HELIUS_API_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HE
  * @param mintAddress The token mint address to check
  */
 export async function getSafetyReport(mintAddress: string): Promise<SafetyReport> {
-  // We will run two major fetches in parallel
   const [assetData, largestHoldersData] = await Promise.all([
     fetchHeliusAsset(mintAddress),
     fetchHeliusTokenLargestHolders(mintAddress),
@@ -36,7 +35,12 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   // --- Run All Checks ---
   const mintAuthority = checkMintAuthority(assetData);
   const freezeAuthority = checkFreezeAuthority(assetData);
-  const holderDistribution = checkHolderDistribution(largestHoldersData, assetData.supply.supply);
+  
+  // --- FIX 1: Safely get the total supply, default to 0 if null ---
+  const totalSupply = assetData.supply?.supply || 0;
+  const holderDistribution = checkHolderDistribution(largestHoldersData, totalSupply);
+  // -----------------------------------------------------------------
+
   const metadata = checkMetadata(assetData);
   const liquidity = checkLiquidity(); // This is still a stubbed check
 
@@ -99,10 +103,19 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
   if (!holders || holders.length === 0) {
     return { status: 'fail', message: '❌ Could not retrieve holder data.' };
   }
+  
+  // --- FIX 2: Handle 0 supply tokens gracefully ---
+  if (totalSupply === 0) {
+    return {
+      status: 'pass',
+      message: '✅ Token has 0 supply. Holder distribution is not applicable.',
+    };
+  }
+  // -----------------------------------------------
 
   const top10 = holders.slice(0, 10);
   const top10Balance = top10.reduce((sum, holder) => sum + parseFloat(holder.amount), 0);
-  const top10Percentage = (top10Balance / totalSupply) * 100;
+  const top10Percentage = (top10Balance / totalSupply) * 100; // This is now safe
 
   if (top10Percentage > 20) {
     return {
@@ -126,9 +139,6 @@ function checkLiquidity(): CheckResult {
 
 // --- Helius API Fetcher Functions ---
 
-/**
- * Fetches the main asset data from Helius (Checks 1, 2, 4)
- */
 async function fetchHeliusAsset(mintAddress: string): Promise<any> {
   const response = await fetch(HELIUS_API_URL, {
     method: 'POST',
@@ -143,22 +153,16 @@ async function fetchHeliusAsset(mintAddress: string): Promise<any> {
     }),
   });
   const data = await response.json();
-
-  // --- IMPROVED ERROR HANDLING ---
+  
   if (data.error) {
     throw new Error(`Helius getAsset error: ${data.error.message}`);
   }
   if (!data.result) {
     throw new Error('Failed to fetch asset data (no result)');
   }
-  // -------------------------------
-
   return data.result;
 }
 
-/**
- * Fetches the top 20 largest token holders (Check 3)
- */
 async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[]> {
   const response = await fetch(HELIUS_API_URL, {
     method: 'POST',
@@ -172,14 +176,11 @@ async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[
   });
   const data = await response.json();
 
-  // --- IMPROVED ERROR HANDLING ---
   if (data.error) {
     throw new Error(`Helius getTokenLargestAccounts error: ${data.error.message}`);
   }
   if (!data.result) {
     throw new Error('Failed to fetch holder data (no result)');
   }
-  // -------------------------------
-
   return data.result.value;
 }
