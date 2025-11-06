@@ -3,9 +3,9 @@ import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
 
-// --- IMPORTS ---
+// --- NEW IMPORTS ---
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-// We no longer need the TradingView import
+import { motion, AnimatePresence } from 'framer-motion'; // For animations
 // -----------------
 
 const inter = Inter({ subsets: ['latin'] });
@@ -43,6 +43,50 @@ function formatDate(timestamp: number): string {
   });
 }
 // -----------------------------
+
+// --- NEW: SAFETY SCORING LOGIC ---
+type SafetyScore = {
+  score: number;
+  color: string;
+  rating: string;
+};
+
+function calculateSafetyScore(report: Report): SafetyScore {
+  let score = 0;
+  const checks = [
+    report.mintAuthority,
+    report.freezeAuthority,
+    report.holderDistribution,
+    report.metadata,
+    report.liquidity, // This is our stubbed 'warn' check
+  ];
+
+  for (const check of checks) {
+    if (check.status === 'pass') {
+      score += 20;
+    } else if (check.status === 'warn') {
+      score += 10;
+    }
+    // 'fail' adds 0
+  }
+
+  let color: string;
+  let rating: string;
+
+  if (score >= 80) {
+    color = "#22c55e"; // green-500
+    rating = "Safe";
+  } else if (score >= 50) {
+    color = "#eab308"; // yellow-500
+    rating = "Caution";
+  } else {
+    color = "#ef4444"; // red-500
+    rating = "Risky";
+  }
+
+  return { score, color, rating };
+}
+// ---------------------------------
 
 
 export default function Home() {
@@ -84,13 +128,15 @@ export default function Home() {
         <meta name="description" content="Check Solana SPL tokens for safety, market data, and charts." />
       </Head>
       
-      <header className="w-full p-4 flex justify-between items-center bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
-        <h1 className="text-xl font-bold">Solana Token Analyzer</h1>
+      <header className="w-full p-4 flex justify-between items-center bg-gray-900/80 border-b border-gray-700/50 sticky top-0 z-50 backdrop-blur-md">
+        <h1 className="text-xl font-bold text-white">
+          Solana Token Analyzer
+        </h1>
         <WalletMultiButton />
       </header>
 
-      <div className={`flex flex-col items-center min-h-screen bg-gray-900 text-white p-4 md:p-8 ${inter.className}`}>
-        <main className="w-full max-w-4xl">
+      <div className={`flex flex-col items-center min-h-screen text-white p-4 md:p-8 ${inter.className}`}>
+        <main className="w-full max-w-6xl"> {/* <-- Increased max-width */}
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-2">
             Token Dashboard
           </h2>
@@ -98,7 +144,7 @@ export default function Home() {
             Get safety checks, market data, and live charts for any SPL token.
           </p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-2 mb-4">
+          <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-2 mb-4 max-w-2xl mx-auto">
             <input
               type="text"
               value={mintAddress}
@@ -110,16 +156,19 @@ export default function Home() {
             <button
               type="submit"
               disabled={isLoading}
-              className="px-6 py-3 font-semibold bg-purple-600 rounded-md hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+              className="px-6 py-3 font-semibold bg-purple-600 rounded-md hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? 'Checking...' : 'Check'}
             </button>
           </form>
 
-          <div className="mt-6">
-            {error && <ErrorMessage message={error} />}
-            {report && <ReportCard report={report} />}
-            {!isLoading && !error && !report && <InfoBox />}
+          {/* --- RESULTS AREA (UPDATED) --- */}
+          <div className="mt-8">
+            <AnimatePresence>
+              {error && <ErrorMessage message={error} />}
+              {report && <ReportCard report={report} />}
+              {!isLoading && !error && !report && <InfoBox />}
+            </AnimatePresence>
           </div>
           
           <Disclaimer />
@@ -129,57 +178,136 @@ export default function Home() {
   );
 }
 
-// --- Sub-Components ---
+// --- NEW: ANIMATION WRAPPER ---
+const AnimatedCard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+    >
+      {children}
+    </motion.div>
+  );
+};
 
-const ReportCard = ({ report }: { report: Report }) => (
-  <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-    <div className="p-4 md:p-6 bg-gray-800">
-      <h2 className="text-3xl font-bold">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
-    </div>
-    <div className="border-t border-gray-700 p-4 md:p-6">
-      <h3 className="text-lg font-semibold text-gray-300 mb-3">Official Links</h3>
-      <SocialLinks links={report.tokenInfo.links} />
-    </div>
-    <div className="border-t border-gray-700 p-4 md:p-6">
-      <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
-      {/* --- CHART COMPONENT SWAPPED BACK --- */}
-      <DexScreenerChart pair={report.dexScreenerPair} />
-    </div>
-    <div className="border-t border-gray-700 p-4 md:p-6">
-      <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
-      <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
-    </div>
-    <div className="border-t border-gray-700 p-4 md:p-6">
-      <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Report</h3>
-      <div className="space-y-4">
-        <ReportItem item={report.mintAuthority} />
-        <ReportItem item={report.freezeAuthority} />
-        <ReportItem item={report.holderDistribution} />
-        <ReportItem item={report.metadata} />
-        <ReportItem item={report.liquidity} />
+// --- NEW: SAFETY METER COMPONENT ---
+const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
+  const circumference = 2 * Math.PI * 60; // 2 * pi * radius
+  const offset = circumference - (score / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center justify-center p-6 bg-gray-800 rounded-lg border border-gray-700 h-full">
+      <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Score</h3>
+      <div className="relative w-40 h-40">
+        <svg className="w-full h-full" viewBox="0 0 140 140">
+          {/* Background Circle */}
+          <circle
+            cx="70"
+            cy="70"
+            r="60"
+            stroke="#374151" // gray-700
+            strokeWidth="12"
+            fill="transparent"
+          />
+          {/* Progress Circle */}
+          <motion.circle
+            cx="70"
+            cy="70"
+            r="60"
+            stroke={color}
+            strokeWidth="12"
+            fill="transparent"
+            strokeLinecap="round"
+            transform="rotate(-90 70 70)"
+            style={{ strokeDasharray: circumference, strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 1, ease: "easeOut" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <motion.span
+            className="text-4xl font-bold"
+            style={{ color: color }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            {score}
+          </motion.span>
+          <span className="text-sm text-gray-400">/ 100</span>
+        </div>
       </div>
+      <motion.div
+        className="mt-4 px-4 py-1.5 rounded-full text-lg font-semibold"
+        style={{ backgroundColor: `${color}20`, color: color }} // 20 = 12.5% opacity
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.7 }}
+      >
+        {rating}
+      </motion.div>
     </div>
-  </div>
-);
+  );
+};
 
-/**
- * --- THIS IS THE FIXED DEXSCREENER CHART ---
- * It uses the 'embed' URL and is styled to look professional.
- */
+
+// --- UPDATED: REPORT CARD (NOW A 2-COLUMN GRID) ---
+const ReportCard = ({ report }: { report: Report }) => {
+  const safetyScore = calculateSafetyScore(report);
+  
+  return (
+    <AnimatedCard>
+      {/* Header */}
+      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden p-4 md:p-6 mb-6">
+        <h2 className="text-3xl font-bold text-center mb-4">{report.tokenInfo.name} ({report.tokenInfo.symbol})</h2>
+        <SocialLinks links={report.tokenInfo.links} />
+      </div>
+
+      {/* 2-Column Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Column 1: Meter & Market Data */}
+        <div className="space-y-6">
+          <SafetyMeter {...safetyScore} />
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6">
+            <h3 className="text-lg font-semibold text-gray-300 mb-3">Market Data</h3>
+            <MarketDataDashboard pair={report.dexScreenerPair} marketCap={report.marketCap} />
+          </div>
+        </div>
+
+        {/* Column 2: Chart & Safety Details */}
+        <div className="space-y-6">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6">
+            <h3 className="text-lg font-semibold text-gray-300 mb-3">Live Chart</h3>
+            <DexScreenerChart pair={report.dexScreenerPair} />
+          </div>
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 md:p-6">
+            <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Report Details</h3>
+            <div className="space-y-3">
+              <ReportItem item={report.mintAuthority} />
+              <ReportItem item={report.freezeAuthority} />
+              <ReportItem item={report.holderDistribution} />
+              <ReportItem item={report.metadata} />
+              <ReportItem item={report.liquidity} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </AnimatedCard>
+  );
+};
+
+// --- UPDATED: DexScreener Chart (using correct embed) ---
 const DexScreenerChart = ({ pair }: { pair: any }) => {
   if (!pair?.url) {
     return <p className="text-sm text-gray-500">No trading chart found.</p>;
   }
   
-  // --- THE REAL FIX ---
-  // 1. We replace '/dex/' with '/embed/'
-  // 2. We add '?theme=dark' for the correct styling
-  // 3. We add '&info=false' to HIDE the info panel you hated
   const chartUrl = `${pair.url.replace('/dex/', '/embed/')}?theme=dark&info=false`;
 
   return (
-    // We give it a large, fixed height to make it feel like a real dashboard
-    <div className="w-full h-[600px] rounded-lg overflow-hidden border border-gray-700">
+    <div className="w-full h-[400px] md:h-[500px] rounded-lg overflow-hidden border border-gray-700">
       <iframe
         src={chartUrl}
         className="w-full h-full"
@@ -190,7 +318,6 @@ const DexScreenerChart = ({ pair }: { pair: any }) => {
   );
 };
 
-// --- Other Components (Unchanged) ---
 
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
@@ -200,7 +327,7 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
   const volume = pair.volume?.h24 || 0;
   const priceChange = pair.priceChange?.h24 || 0;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 gap-4">
       <StatCard 
         title="Price USD" 
         value={formatUSD(pair.priceUsd)}
@@ -241,16 +368,8 @@ const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number
         value={formatDate(pair.pairCreatedAt)}
       />
       <StatCard 
-        title="Pooled Token" 
-        value={`${formatNumber(pair.liquidity.base)} ${pair.baseToken.symbol}`}
-      />
-      <StatCard 
-        title={`Pooled ${pair.quoteToken.symbol}`}
-        value={`${formatNumber(pair.liquidity.quote)} ${pair.quoteToken.symbol}`}
-      />
-      <StatCard 
         title="Pair Address" 
-        value={`${pair.pairAddress.substring(0, 6)}...${pair.pairAddress.substring(pair.pairAddress.length - 4)}`}
+        value={`${pair.pairAddress.substring(0, 4)}...${pair.pairAddress.substring(pair.pairAddress.length - 4)}`}
       />
     </div>
   );
@@ -291,11 +410,12 @@ const SocialLinks = ({ links }: { links: any }) => {
     createLink('Discord', links.discord),
   ].filter(Boolean); 
   if (allLinks.length === 0) {
-    return <p className="text-sm text-gray-500">No official links found.</p>;
+    return <p className="text-sm text-center text-gray-500">No official links found.</p>;
   }
-  return <div className="flex flex-wrap gap-2">{allLinks}</div>;
+  return <div className="flex flex-wrap gap-2 justify-center">{allLinks}</div>;
 };
 
+// --- UPDATED: ReportItem (added hover effect) ---
 const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
   const { message } = item;
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
@@ -303,15 +423,15 @@ const ReportItem = ({ item }: { item: { status: string; message: string } }) => 
   if (icon === '⚠️') textColor = 'text-yellow-400';
   if (icon === '❌') textColor = 'text-red-400';
   return (
-    <div className={`flex items-start ${textColor}`}>
-      <span className="text-xl mr-3">{icon}</span>
+    <div className={`flex items-start ${textColor} p-3 rounded-lg transition-colors hover:bg-gray-700/50`}>
+      <span className="text-xl mr-3 mt-0.5">{icon}</span>
       <p className="text-gray-100">{message.substring(2)}</p>
     </div>
   );
 };
 
 const Disclaimer = () => (
-  <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100">
+  <div className="mt-8 p-4 bg-yellow-900 border border-yellow-700 rounded-md text-yellow-100 max-w-4xl mx-auto">
     <h3 className="font-bold text-lg mb-2">⚠️ THIS IS NOT FINANCIAL ADVICE</h3>
     <p className="text-sm">
       This is an automated tool and not an endorsement. A high safety score does
@@ -323,15 +443,17 @@ const Disclaimer = () => (
 );
 
 const ErrorMessage = ({ message }: { message: string }) => (
-  <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100">
-    <p><strong>Error:</strong> {message}</p>
-  </div>
+  <AnimatedCard>
+    <div className="p-4 bg-red-900 border border-red-700 rounded-md text-red-100 max-w-2xl mx-auto">
+      <p><strong>Error:</strong> {message}</p>
+    </div>
+  </AnimatedCard>
 );
 
 const InfoBox = () => (
-  <div className="p-8 text-center bg-gray-800 border border-gray-700 rounded-lg">
+  <div className="p-12 text-center bg-gray-800 border border-gray-700 rounded-lg max-w-2xl mx-auto">
     <p className="text-gray-400">
-      Your token report will appear here.
+      Your professional token report will appear here.
     </p>
   </div>
 );
