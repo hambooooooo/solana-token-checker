@@ -1,15 +1,11 @@
+// path: lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
-// Declare a global variable to hold the prisma client
-// This prevents multiple instances in development
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+declare global {
+  var prisma: PrismaClient | undefined;
+}
 
-// Use the existing instance or create a new one
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    log: ['query', 'error', 'warn'],
-  });
+const client = globalThis.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== 'production') globalThis.prisma = client;
 
-// Save the instance to the global object in development
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export default client;

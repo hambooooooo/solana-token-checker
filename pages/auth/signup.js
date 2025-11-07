@@ -1,7 +1,7 @@
-import Head from 'next/head';
+// path: pages/auth/signup.js
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { signIn } from 'next-auth/react'; // Used for automatic sign-in after registration
+import { signIn } from 'next-auth/react';
 
 export default function SignUp() {
   const [name, setName] = useState('');
@@ -11,14 +11,13 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSignUp = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      // 1. Call the custom Sign Up API endpoint
-      const response = await fetch('/api/signup', {
+      const res = await fetch('/api/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -26,14 +25,12 @@ export default function SignUp() {
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // API returned an error (e.g., user exists)
-        throw new Error(data.message || 'Failed to create account.');
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Something went wrong');
       }
 
-      // 2. Successful registration, now automatically sign the user in
+      // Automatically sign in the user after successful registration
       const signInResult = await signIn('credentials', {
         redirect: false,
         email,
@@ -41,89 +38,67 @@ export default function SignUp() {
       });
 
       if (signInResult.error) {
-        // Failed to sign in, but account was created
-        router.push('/auth/signin?error=SigninRequired');
+        setError(signInResult.error);
+        setLoading(false);
       } else {
-        // Success! Redirect to the homepage
-        router.push('/');
+        router.push('/'); // Redirect to homepage after successful signup and signin
       }
-
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <>
-      <Head>
-        <title>Sign Up</title>
-      </Head>
-      <div className="flex justify-center items-center min-h-[calc(100vh-80px)] p-4">
-        <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-xl shadow-2xl border border-gray-700">
-          <h2 className="text-3xl font-bold text-center text-white">Create Account</h2>
-          
-          {/* Display Errors */}
-          {error && (
-            <div className="p-3 text-sm text-red-100 bg-red-600 rounded-lg">
-              {error}
-            </div>
-          )}
+    <div style={{ maxWidth: '400px', margin: '50px auto' }}>
+      <h1>Sign Up</h1>
 
-          <form onSubmit={handleSignUp} className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-300">Name (Optional)</label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">Email Address</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              {loading ? 'Registering...' : 'Sign Up'}
-            </button>
-          </form>
+      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
 
-          <div className="text-center text-sm text-gray-400">
-            Already have an account?{' '}
-            <a href="/auth/signin" className="font-medium text-purple-400 hover:text-purple-300">
-              Sign In
-            </a>
-          </div>
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '1rem' }}>
+          <label>Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={{ width: '100%', padding: '8px' }}
+          />
         </div>
-      </div>
-    </>
+        <div style={{ marginBottom: '1rem' }}>
+          <label>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          style={{ padding: '10px 20px' }}
+        >
+          {loading ? 'Signing up...' : 'Sign Up'}
+        </button>
+      </form>
+       <p style={{ marginTop: '1rem' }}>
+        Already have an account?{' '}
+        <a href="/auth/signin">Sign In</a>
+      </p>
+    </div>
   );
 }
