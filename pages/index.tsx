@@ -4,9 +4,9 @@ import Head from 'next/head';
 import { Inter } from 'next/font/google';
 
 // --- IMPORTS ---
-import { useWallet } from '@solana/wallet-adapter-react'; // <-- Import useWallet
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion, AnimatePresence } from 'framer-motion'; 
+import { WalletBalance } from '@/components/WalletBalance'; // <-- 1. IMPORT NEW COMPONENT
 // -----------------
 
 const inter = Inter({ subsets: ['latin'] });
@@ -95,16 +95,14 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [userBalance, setUserBalance] = useState<number | null>(null);
-  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
-  const { publicKey } = useWallet(); // Get the connected wallet's public key
+  // --- 2. REMOVE ALL 'userBalance' and 'isBalanceLoading' states ---
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setReport(null);
     setError(null);
-    setUserBalance(null); 
+    // No longer need to reset userBalance
     try {
       const response = await fetch(`/api/check/${mintAddress}`);
       if (!response.ok) {
@@ -126,35 +124,7 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    // Reset balance if wallet disconnects
-    if (!publicKey) {
-      setUserBalance(null);
-    }
-    
-    if (publicKey && report) {
-      const fetchBalance = async () => {
-        setIsBalanceLoading(true);
-        try {
-          const response = await fetch(`/api/balance?wallet=${publicKey.toBase58()}&mint=${mintAddress}`);
-          if (response.ok) {
-            const data = await response.json();
-            setUserBalance(data.uiAmount);
-          } else {
-            setUserBalance(null);
-            console.error("API call to /api/balance failed:", response.statusText);
-          }
-        } catch (err) {
-          console.error("Failed to fetch balance:", err);
-          setUserBalance(null);
-        } finally {
-          setIsBalanceLoading(false);
-        }
-      };
-      
-      fetchBalance();
-    }
-  }, [publicKey, report, mintAddress]); 
+  // --- 3. REMOVE the entire useEffect for fetching balance ---
 
   return (
     <>
@@ -163,11 +133,15 @@ export default function Home() {
         <meta name="description" content="Check Solana SPL tokens for safety, market data, and charts." />
       </Head>
       
+      {/* --- 4. UPDATE THE HEADER --- */}
       <header className="w-full p-4 flex justify-between items-center bg-gray-900/80 border-b border-gray-700/50 sticky top-0 z-50 backdrop-blur-md">
         <h1 className="text-xl font-bold text-white">
           Solana Token Analyzer
         </h1>
-        <WalletMultiButton />
+        <div className="flex items-center gap-3">
+          <WalletBalance />
+          <WalletMultiButton />
+        </div>
       </header>
 
       <div className={`flex flex-col items-center min-h-screen text-white p-4 md:p-8 ${inter.className}`}>
@@ -205,9 +179,7 @@ export default function Home() {
                 <ReportCard 
                   report={report} 
                   mintAddress={mintAddress}
-                  userBalance={userBalance} 
-                  isBalanceLoading={isBalanceLoading}
-                  // We no longer pass publicKey
+                  // 5. REMOVE all balance props
                 />
               )}
               {!isLoading && !error && !report && <InfoBox />}
@@ -286,64 +258,16 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
-// --- UPDATED: User Balance Card ---
-const UserBalanceCard = ({ 
-  balance, 
-  isLoading, 
-  symbol, 
-}: { 
-  balance: number | null, 
-  isLoading: boolean, 
-  symbol: string,
-}) => {
-  // --- THIS IS THE FIX ---
-  // We check the wallet status directly inside this component.
-  const { publicKey } = useWallet();
-  // -----------------------
-
-  let content = null;
-
-  if (!publicKey) {
-    // STATE 1: No wallet connected
-    content = <div className="text-lg text-gray-500">Connect wallet to see balance</div>;
-  } else if (isLoading) {
-    // STATE 2: Wallet connected, loading balance
-    content = <div className="text-2xl font-bold text-gray-400 animate-pulse">Loading...</div>;
-  } else if (balance !== null) {
-    // STATE 3: Wallet connected, balance loaded (even 0)
-    const formattedBalance = balance > 1000 ? formatNumber(balance) : balance.toFixed(4);
-    content = (
-      <div className="text-2xl font-bold text-white">
-        {formattedBalance} <span className="text-lg text-gray-400">{symbol}</span>
-      </div>
-    );
-  } else {
-    // STATE 4: Wallet connected, but balance is still null (API failed or didn't run)
-    content = <div className="text-lg text-gray-500">No balance found</div>;
-  }
-
-  return (
-    <Card>
-      <h3 className="text-lg font-semibold text-gray-300 mb-2 text-center">My Balance</h3>
-      <div className="flex items-center justify-center h-16">
-        {content}
-      </div>
-    </Card>
-  );
-};
+// --- 6. REMOVE the entire 'UserBalanceCard' component ---
 
 
 // --- Report Card (Main Layout) ---
 const ReportCard = ({ 
   report, 
   mintAddress, 
-  userBalance, 
-  isBalanceLoading,
 }: { 
   report: Report, 
   mintAddress: string,
-  userBalance: number | null,
-  isBalanceLoading: boolean,
 }) => {
   const safetyScore = calculateSafetyScore(report);
   const raydiumUrl = `https://raydium.io/swap/?outputMint=${mintAddress}`;
@@ -372,14 +296,8 @@ const ReportCard = ({
       {/* 2-Column Dashboard Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
         
-        {/* --- Sidebar (Column 1) --- */}
+        {/* --- 7. CLEAN UP THE SIDEBAR --- */}
         <div className="lg:col-span-1 space-y-6">
-          <UserBalanceCard 
-            balance={userBalance} 
-            isLoading={isBalanceLoading} 
-            symbol={report.tokenInfo.symbol}
-            // No longer needs publicKey passed in
-          />
           <SafetyMeter key={safetyScore.score} {...safetyScore} />
           <Card>
             <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
