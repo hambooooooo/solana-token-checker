@@ -31,7 +31,11 @@ export default function Header() {
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
         {session ? (
           <>
-            <span style={{ fontSize: '0.9rem' }}>{session.user.email}</span>
+            {/* FIX: Added optional chaining (?.). 
+              Even if 'session' exists, 'session.user' might be undefined.
+              This safely accesses 'email' only if 'session.user' also exists.
+            */}
+            <span style={{ fontSize: '0.9rem' }}>{session.user?.email}</span>
             <button 
               onClick={() => signOut()} 
               style={{ padding: '8px 12px', cursor: 'pointer' }}
