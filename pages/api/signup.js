@@ -1,4 +1,6 @@
 // path: pages/api/signup.js
+// --- MODIFIED FILE ---
+
 import prisma from '../../lib/prisma';
 import bcrypt from 'bcryptjs';
 
@@ -10,7 +12,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const { email, password, name }T
+  // FIX: Corrected typo }T to };
+  const { email, password, name } = req.body;
+
   if (!email || !password || !name) {
     return res.status(400).json({ message: 'Missing required fields' });
   }

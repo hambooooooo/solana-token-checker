@@ -1,5 +1,5 @@
 // path: components/Header.tsx
-// --- MODIFIED FILE ---
+// --- MODIFIED FILE --- (Includes the previous fix for session.user.email)
 
 import { useSession, signIn, signOut } from 'next-auth/react';
 import Link from 'next/link';
@@ -31,10 +31,7 @@ export default function Header() {
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
         {session ? (
           <>
-            {/* FIX: Added optional chaining (?.). 
-              Even if 'session' exists, 'session.user' might be undefined.
-              This safely accesses 'email' only if 'session.user' also exists.
-            */}
+            {/* FIX: Added optional chaining to prevent crash if session.user is undefined */}
             <span style={{ fontSize: '0.9rem' }}>{session.user?.email}</span>
             <button 
               onClick={() => signOut()} 

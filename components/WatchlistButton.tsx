@@ -1,15 +1,16 @@
 // path: components/WatchlistButton.tsx
-// --- NEW FILE --- (Extracted component for clarity)
+// --- MODIFIED FILE ---
 
 import useSWR, { useSWRConfig } from 'swr';
 import { useState } from 'react';
-
-// Re-using the fetcher definition
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// FIX: Import the new shared fetcher and error type
+import fetcher, { FetchError } from '@/lib/fetcher';
 
 export default function WatchlistButton({ mintAddress }: { mintAddress: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { data: watchlist, error } = useSWR<string[]>('/api/watchlist', fetcher);
+  
+  // FIX: Use the imported fetcher and provide the custom error type to useSWR
+  const { data: watchlist, error } = useSWR<string[], FetchError>('/api/watchlist', fetcher);
   const { mutate } = useSWRConfig();
 
   if (error) return <div>Failed to load watchlist status</div>;

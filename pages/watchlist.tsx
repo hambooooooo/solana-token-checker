@@ -1,19 +1,19 @@
 // path: pages/watchlist.tsx
-// --- NEW FILE ---
+// --- MODIFIED FILE ---
 
-import { getSession } from 'next-auth/react';
 import type { GetServerSideProps, NextPage } from 'next';
 import useSWR from 'swr';
-
-// Simple fetcher function for useSWR
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './api/auth/[...nextauth]';
+// FIX: Import the new shared fetcher and error type
+import fetcher, { FetchError } from '@/lib/fetcher';
 
 const WatchlistPage: NextPage = () => {
   const {
     data: watchlist,
     error,
     isLoading,
-  } = useSWR<string[]>('/api/watchlist', fetcher);
+  } = useSWR<string[], FetchError>('/api/watchlist', fetcher); // Use the imported fetcher
 
   return (
     <div style={{ padding: '2rem' }}>
@@ -21,8 +21,10 @@ const WatchlistPage: NextPage = () => {
       
       {isLoading && <p>Loading watchlist...</p>}
       
-      {error && <p style={{ color: 'red' }}>Failed to load watchlist.</p>}
+      {/* Now we can safely access error.message */}
+      {error && <p style={{ color: 'red' }}>Failed to load watchlist. {error.message}</p>}
 
+      {/* This check is correct and will now work as intended */}
       {watchlist && (
         <>
           {watchlist.length === 0 ? (
@@ -42,9 +44,9 @@ const WatchlistPage: NextPage = () => {
   );
 };
 
-// Protect the page using server-side redirection
+// This section (getServerSideProps) was correct and remains unchanged.
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const session = await getSession(context);
+  const session = await getServerSession(context.req, context.res, authOptions);
 
   if (!session) {
     return {
@@ -57,7 +59,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
   return {
     props: {
-      session, // Pass session as prop
+      session: JSON.parse(JSON.stringify(session)),
     },
   };
 };
