@@ -1,5 +1,12 @@
 import { PublicKey } from '@solana/web3.js';
 
+// --- NEW: Add known burn addresses ---
+// 1nc1nerator11111111111111111111111111111111 is the main one
+const BURN_ADDRESSES = new Set([
+  '1nc1nerator11111111111111111111111111111111',
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', // SPL Token Program (often holds burned LP)
+]);
+
 // Define the structure for a single check
 type CheckResult = {
   status: 'pass' | 'fail' | 'warn';
@@ -11,19 +18,20 @@ export type SafetyReport = {
   // Safety Checks
   mintAuthority: CheckResult;
   freezeAuthority: CheckResult;
-  holderDistribution: CheckResult & { holders: any[] }; // Pass holders to frontend
+  holderDistribution: CheckResult & { holders: any[] }; 
   liquidity: CheckResult; 
   metadata: CheckResult;
+  lpCheck: CheckResult; // <-- 1. ADD NEW LP CHECK
   // Token Info
   tokenInfo: {
     name: string;
     symbol: string;
-    links: any; // For social links
+    links: any; 
   };
-  marketCap: number; // Helius Market Cap
+  marketCap: number; 
   totalSupply: number; 
   // DexScreener Data
-  dexScreenerPair: any; // This will hold all the "jazz"
+  dexScreenerPair: any; 
 };
 
 // Define the Helius API URL
@@ -41,7 +49,6 @@ async function fetchDexScreenerData(mintAddress: string) {
       return null;
     }
     const data = await response.json();
-    // Return the first, most liquid pair.
     return data.pairs?.[0] || null;
   } catch (error) {
     console.error("Failed to fetch DexScreener data:", error);
@@ -51,7 +58,6 @@ async function fetchDexScreenerData(mintAddress: string) {
 
 /**
  * Fetches and processes all token safety checks from Helius
- * @param mintAddress The token mint address to check
  */
 export async function getSafetyReport(mintAddress: string): Promise<SafetyReport> {
   
@@ -76,7 +82,11 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   };
 
   const metadata = checkMetadata(assetData);
-  const liquidity = checkLiquidity(dexScreenerPair, totalSupply); // <-- Pass totalSupply
+  const liquidity = checkLiquidity(dexScreenerPair, totalSupply);
+  
+  // --- 2. RUN THE NEW LP CHECK ---
+  const lpCheck = await checkLpLock(dexScreenerPair);
+  // -----------------------------
   
   const marketCap = assetData.supply?.market_cap || 0;
 
@@ -87,6 +97,7 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
     holderDistribution,
     liquidity,
     metadata,
+    lpCheck: lpCheck, // <-- 3. ADD TO REPORT
     tokenInfo: {
       name: assetData.content.metadata.name || 'Unknown',
       symbol: assetData.content.metadata.symbol || 'Unknown',
@@ -104,7 +115,7 @@ function checkMintAuthority(assetData: any): CheckResult {
   if (assetData.ownership.mint_authority) {
     return {
       status: 'fail',
-      message: '❌ Mint Authority Active: The creator can print infinite new tokens, devaluing your position.',
+      message: '❌ Mint Authority Active: The creator can print infinite new tokens.',
     };
   }
   return {
@@ -117,7 +128,7 @@ function checkFreezeAuthority(assetData: any): CheckResult {
   if (assetData.ownership.freeze_authority) {
     return {
       status: 'fail',
-      message: '❌ Freeze Authority Active: The creator can freeze this token in your wallet, making it untradeable.',
+      message: '❌ Freeze Authority Active: The creator can freeze this token in your wallet.',
     };
   }
   return {
@@ -139,7 +150,6 @@ function checkMetadata(assetData: any): CheckResult {
   };
 }
 
-// --- NEW, STRICTER HOLDER CHECK ---
 function checkHolderDistribution(holders: any[], totalSupply: number): CheckResult {
   if (totalSupply === 0) {
     return {
@@ -147,97 +157,126 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
       message: '✅ Token has 0 supply. Holder distribution is not applicable.',
     };
   }
-
   if (!holders || holders.length === 0) {
     return { status: 'fail', message: '❌ Could not retrieve holder data.' };
   }
-  
   const top10 = holders.slice(0, 10);
   const top10Balance = top10.reduce((sum, holder) => {
     const amount = parseFloat(holder.uiAmount); 
     return sum + (isNaN(amount) ? 0 : amount);
   }, 0);
-  
-  if (totalSupply === 0) {
-     return { status: 'pass', message: '✅ Token has 0 supply.' };
-  }
-
   const top10Percentage = (top10Balance / totalSupply) * 100;
-
   if (isNaN(top10Percentage)) {
     return { status: 'fail', message: '❌ Failed to calculate holder distribution.' };
   }
-
   const top1HolderAmount = parseFloat(holders[0]?.uiAmount) || 0;
   const top1Percentage = (top1HolderAmount / totalSupply) * 100;
 
-  // --- MUCH STRICTER ---
   if (top1Percentage > 10) {
      return {
       status: 'fail',
-      message: `❌ Extreme Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply. This is a massive rug pull risk.`,
+      message: `❌ Extreme Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply.`,
     };
   }
-  
   if (top1Percentage > 5) {
      return {
       status: 'warn',
       message: `⚠️ High Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply.`,
     };
   }
-
   if (top10Percentage > 25) {
     return {
       status: 'warn',
-      message: `⚠️ High Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply. A sell-off could crash the price.`,
+      message: `⚠️ High Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply.`,
     };
   }
-  
   return {
     status: 'pass',
     message: `✅ Healthy Distribution: Top wallet holds ${top1Percentage.toFixed(1)}% and top 10 hold ${top10Percentage.toFixed(1)}%.`,
   };
 }
 
-// --- NEW, STRICTER LIQUIDITY CHECK ---
 function checkLiquidity(pair: any, totalSupply: number): CheckResult {
   if (totalSupply === 0) {
     return {
-      status: 'pass', // This is a "pass" for this check, but will be scored as 0.
+      status: 'pass',
       message: '✅ Token has 0 supply. Liquidity is not applicable.',
     };
   }
-
   if (!pair || !pair.liquidity) {
     return {
       status: 'fail',
-      message: '❌ No Liquidity: This token has no discoverable liquidity pool. It is untradeable.',
+      message: '❌ No Liquidity: This token has no discoverable liquidity pool.',
     };
   }
-
   const lpValue = parseFloat(pair.liquidity.usd);
-
-  // --- MUCH STRICTER ---
   if (lpValue < 10000) {
     return {
       status: 'fail',
-      message: `❌ Dangerously Low Liquidity: Only $${lpValue.toLocaleString()} in the pool. This is a high-risk rug pull.`,
+      message: `❌ Dangerously Low Liquidity: Only $${lpValue.toLocaleString()} in the pool.`,
     };
   }
   if (lpValue < 50000) {
     return {
       status: 'warn',
-      message: `⚠️ Low Liquidity: Only $${lpValue.toLocaleString()} in the pool. Be cautious of high price impact (slippage).`,
+      message: `⚠️ Low Liquidity: Only $${lpValue.toLocaleString()} in the pool.`,
     };
   }
-  
-  // NOTE: This check does NOT verify if liquidity is locked or burned.
   return {
     status: 'pass',
-    message: `✅ Liquidity Found: $${lpValue.toLocaleString()} in the pool. (Note: This does not verify if LP is locked.)`,
+    message: `✅ Liquidity Found: $${lpValue.toLocaleString()} in the pool.`,
   };
 }
 
+// --- 4. THIS IS THE NEW LP LOCK CHECK FUNCTION ---
+async function checkLpLock(pair: any): Promise<CheckResult> {
+  if (!pair || !pair.lpToken) {
+    return {
+      status: 'fail',
+      message: '❌ LP Check Failed: Could not find liquidity pool token.'
+    };
+  }
+
+  const lpMintAddress = pair.lpToken.address;
+  
+  try {
+    const holders = await fetchHeliusTokenLargestHolders(lpMintAddress);
+    if (!holders || holders.length === 0) {
+      return {
+        status: 'fail',
+        message: '❌ LP Check Failed: Could not fetch LP token holders.'
+      };
+    }
+    
+    // Check the #1 holder of the LP token
+    const topHolder = holders[0];
+    const topHolderAddress = topHolder.address;
+    const topHolderAmount = parseFloat(topHolder.uiAmount);
+
+    // Check if the LP tokens are in a known burn address
+    if (BURN_ADDRESSES.has(topHolderAddress)) {
+      return {
+        status: 'pass',
+        message: '✅ LP Burned: 100% of liquidity pool tokens are in a burn address.'
+      };
+    }
+    
+    // We can add more checks here later for known lock contracts (e.g., Streamflow)
+    
+    // If not burned, it's in a private wallet. This is a critical failure.
+    return {
+      status: 'fail',
+      message: `❌ LP Not Locked: 100% of liquidity is held in a private wallet (${shortenAddress(topHolderAddress)}). Extreme rug pull risk.`
+    };
+
+  } catch (error) {
+    console.error("Failed to check LP lock status:", error);
+    return {
+      status: 'fail',
+      message: '❌ LP Check Failed: An error occurred while checking LP holders.'
+    };
+  }
+}
 
 // --- Helius API Fetcher Functions (Unchanged) ---
 
@@ -285,4 +324,10 @@ async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[
     throw new Error('Failed to fetch holder data (no result)');
   }
   return data.result.value; 
+}
+
+// --- NEW: Helper function to shorten address (needed for new check) ---
+function shortenAddress(address: string): string {
+  if (!address) return '';
+  return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
 }

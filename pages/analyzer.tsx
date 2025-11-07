@@ -55,41 +55,40 @@ type SafetyScore = {
 function calculateSafetyScore(report: Report): SafetyScore {
   let score = 100;
   
-  // Rule 1: 0 Supply token (like Wobbles)
-  // These are often special cases, not "scams" but not "investable"
+  // Rule 1: 0 Supply token
   if (report.totalSupply === 0) {
-    score = 80; // Give it a "Caution" score by default
+    score = 80; // "Caution" score
   } else {
-    // Standard Scoring
-    
-    // --- Critical Failures (Instant 0) ---
+    // --- Critical Failures (Massive Penalties) ---
     if (report.mintAuthority.status === 'fail') {
-      score = 0;
+      score -= 50; 
     }
     if (report.freezeAuthority.status === 'fail') {
-      score = 0;
+      score -= 50;
+    }
+    // --- THIS IS THE NEW, CRITICAL CHECK ---
+    if (report.lpCheck.status === 'fail') {
+      score -= 50; 
+    }
+    // ----------------------------------------
+
+    // --- Liquidity Amount Check ---
+    if (report.liquidity.status === 'fail') {
+      score -= 40;
+    } else if (report.liquidity.status === 'warn') {
+      score -= 20;
     }
 
-    // Only run other checks if not already 0
-    if (score > 0) {
-      // --- Liquidity Amount Check ---
-      if (report.liquidity.status === 'fail') {
-        score -= 40;
-      } else if (report.liquidity.status === 'warn') {
-        score -= 20;
-      }
+    // --- Holder Distribution Check ---
+    if (report.holderDistribution.status === 'fail') {
+      score -= 40;
+    } else if (report.holderDistribution.status === 'warn') {
+      score -= 20;
+    }
 
-      // --- Holder Distribution Check ---
-      if (report.holderDistribution.status === 'fail') {
-        score -= 40;
-      } else if (report.holderDistribution.status === 'warn') {
-        score -= 20;
-      }
-
-      // --- Metadata Check (Minor) ---
-      if (report.metadata.status === 'warn') {
-        score -= 5;
-      }
+    // --- Metadata Check (Minor) ---
+    if (report.metadata.status === 'warn') {
+      score -= 5;
     }
   }
 
@@ -179,10 +178,9 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
-// --- FIXED: TopHoldersCard logic ---
+// --- TopHoldersCard ---
 const TopHoldersCard = ({ holders, totalSupply }: { holders: any[], totalSupply: number }) => {
   
-  // Check for 0 supply *first*
   if (totalSupply === 0) {
     return (
       <Card>
@@ -191,8 +189,6 @@ const TopHoldersCard = ({ holders, totalSupply }: { holders: any[], totalSupply:
       </Card>
     );
   }
-
-  // Then check for no holder data
   if (!holders || holders.length === 0) {
     return (
       <Card>
@@ -201,7 +197,6 @@ const TopHoldersCard = ({ holders, totalSupply }: { holders: any[], totalSupply:
       </Card>
     );
   }
-
   const top10 = holders.slice(0, 10);
 
   return (
@@ -267,6 +262,8 @@ const ReportCard = ({
           <Card>
             <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
             <div className="space-y-3">
+              {/* --- ADD THE NEW LP CHECK TO THE UI --- */}
+              <ReportItem item={report.lpCheck} />
               <ReportItem item={report.mintAuthority} />
               <ReportItem item={report.freezeAuthority} />
               <ReportItem item={report.holderDistribution} />
@@ -307,13 +304,12 @@ const DexScreenerChart = ({ pair }: { pair: any }) => {
   );
 };
 
-// --- FIXED: MarketDataDashboard (Crash-proof) ---
+// --- MarketDataDashboard ---
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No market data found for this token.</p>;
   }
   
-  // Use optional chaining (?.) to safely access nested properties
   const txns = pair.txns?.h24 || { buys: 0, sells: 0 };
   const volume = pair.volume?.h24 || 0;
   const priceChange = pair.priceChange?.h24 || 0;
@@ -373,6 +369,15 @@ const SocialLinks = ({ links }: { links: any }) => {
 
 // --- Report Item ---
 const ReportItem = ({ item }: { item: { status: string; message: string } }) => {
+  // Handle null item just in case
+  if (!item) {
+    return (
+      <div className="flex items-start text-yellow-400 p-3 rounded-lg transition-colors hover:bg-gray-700/50">
+        <span className="text-xl mr-3 mt-0.5">⚠️</span>
+        <p className="text-gray-100">Check data is missing.</p>
+      </div>
+    );
+  }
   const { message } = item;
   const icon = message.startsWith('✅') ? '✅' : message.startsWith('⚠️') ? '⚠️' : '❌';
   let textColor = 'text-green-400';
