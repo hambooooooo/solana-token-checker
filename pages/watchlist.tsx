@@ -5,15 +5,49 @@ import type { GetServerSideProps, NextPage } from 'next';
 import useSWR from 'swr';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './api/auth/[...nextauth]';
-// FIX: Import the new shared fetcher and error type
-import fetcher, { FetchError } from '@/lib/fetcher';
+
+// --- FIX: Define FetchError and fetcher locally ---
+export class FetchError extends Error {
+  info: any;
+  status: number;
+
+  constructor(message: string, status: number, info: any) {
+    super(message);
+    this.status = status;
+    this.info = info;
+  }
+}
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    let info;
+    try {
+      info = await res.json();
+    } catch (e) {
+      info = 'No JSON error response';
+    }
+
+    const error = new FetchError(
+      'An error occurred while fetching the data.',
+      res.status,
+      info
+    );
+    throw error;
+  }
+
+  return res.json();
+};
+// --- END OF FIX ---
+
 
 const WatchlistPage: NextPage = () => {
   const {
     data: watchlist,
     error,
     isLoading,
-  } = useSWR<string[], FetchError>('/api/watchlist', fetcher); // Use the imported fetcher
+  } = useSWR<string[], FetchError>('/api/watchlist', fetcher); // Use the local fetcher
 
   return (
     <div style={{ padding: '2rem' }}>
@@ -21,10 +55,8 @@ const WatchlistPage: NextPage = () => {
       
       {isLoading && <p>Loading watchlist...</p>}
       
-      {/* Now we can safely access error.message */}
       {error && <p style={{ color: 'red' }}>Failed to load watchlist. {error.message}</p>}
 
-      {/* This check is correct and will now work as intended */}
       {watchlist && (
         <>
           {watchlist.length === 0 ? (
@@ -44,7 +76,6 @@ const WatchlistPage: NextPage = () => {
   );
 };
 
-// This section (getServerSideProps) was correct and remains unchanged.
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
 

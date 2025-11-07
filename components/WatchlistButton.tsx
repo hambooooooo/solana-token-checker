@@ -3,13 +3,46 @@
 
 import useSWR, { useSWRConfig } from 'swr';
 import { useState } from 'react';
-// FIX: Import the new shared fetcher and error type
-import fetcher, { FetchError } from '@/lib/fetcher';
+
+// --- FIX: Define FetchError and fetcher locally ---
+export class FetchError extends Error {
+  info: any;
+  status: number;
+
+  constructor(message: string, status: number, info: any) {
+    super(message);
+    this.status = status;
+    this.info = info;
+  }
+}
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    let info;
+    try {
+      info = await res.json();
+    } catch (e) {
+      info = 'No JSON error response';
+    }
+
+    const error = new FetchError(
+      'An error occurred while fetching the data.',
+      res.status,
+      info
+    );
+    throw error;
+  }
+
+  return res.json();
+};
+// --- END OF FIX ---
+
 
 export default function WatchlistButton({ mintAddress }: { mintAddress: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // FIX: Use the imported fetcher and provide the custom error type to useSWR
   const { data: watchlist, error } = useSWR<string[], FetchError>('/api/watchlist', fetcher);
   const { mutate } = useSWRConfig();
 
@@ -26,7 +59,6 @@ export default function WatchlistButton({ mintAddress }: { mintAddress: string }
       ? watchlist.filter((item) => item !== mintAddress)
       : [...watchlist, mintAddress];
 
-    // Optimistically update the local cache
     mutate('/api/watchlist', newWatchlist, false);
 
     try {
@@ -38,10 +70,8 @@ export default function WatchlistButton({ mintAddress }: { mintAddress: string }
         body: JSON.stringify({ mintAddress }),
       });
 
-      // Re-validate to get the source of truth from the server
       mutate('/api/watchlist');
     } catch (e) {
-      // Revert optimistic update on error
       mutate('/api/watchlist', watchlist, false);
       console.error('Failed to update watchlist:', e);
     } finally {
