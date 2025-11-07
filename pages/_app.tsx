@@ -1,21 +1,18 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
-
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { useMemo } from 'react';
 
-// --- THIS IS THE FIX ---
-// Import the CSS at the top, not with a 'require' statement.
+// Import the wallet adapter's CSS
 import '@solana/wallet-adapter-react-ui/styles.css';
-// -----------------------
+import { Header } from '@/components/Header'; // This import is now correct
 
 export default function App({ Component, pageProps }: AppProps) {
   
   const network = WalletAdapterNetwork.Mainnet; 
-  
   const endpoint = useMemo(
     () => `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`, 
     []
@@ -33,7 +30,12 @@ export default function App({ Component, pageProps }: AppProps) {
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
-          <Component {...pageProps} />
+          <div className="flex flex-col min-h-screen bg-gray-900 text-white">
+            <Header />
+            <main className="flex-grow">
+              <Component {...pageProps} />
+            </main>
+          </div>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
