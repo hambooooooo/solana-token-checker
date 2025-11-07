@@ -21,6 +21,7 @@ export type SafetyReport = {
     links: any; // For social links
   };
   marketCap: number; // Helius Market Cap
+  totalSupply: number; // <-- ADD THIS LINE
   // DexScreener Data
   dexScreenerPair: any; // This will hold all the "jazz"
 };
@@ -67,15 +68,13 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   const mintAuthority = checkMintAuthority(assetData);
   const freezeAuthority = checkFreezeAuthority(assetData);
   
+  // Helius provides supply as a float, which is what we need
   const totalSupply = assetData.supply?.supply || 0;
   
-  // --- UPDATED ---
-  // We now pass the 'totalSupply' (a float) into the holder check
   const holderDistribution = {
     ...checkHolderDistribution(largestHoldersData, totalSupply),
     holders: largestHoldersData,
   };
-  // ---------------
 
   const metadata = checkMetadata(assetData);
   const liquidity = checkLiquidity(dexScreenerPair);
@@ -95,6 +94,7 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
       links: assetData.content.links || {},
     },
     marketCap,
+    totalSupply: totalSupply, // <-- ADD THIS LINE
     dexScreenerPair: dexScreenerPair,
   };
 }
@@ -140,15 +140,11 @@ function checkMetadata(assetData: any): CheckResult {
   };
 }
 
-/**
- * --- THIS IS THE NEW, RELIABLE HOLDER CHECK ---
- */
 function checkHolderDistribution(holders: any[], totalSupply: number): CheckResult {
   if (!holders || holders.length === 0) {
     return { status: 'fail', message: '❌ Could not retrieve holder data.' };
   }
   
-  // This check is fine
   if (totalSupply === 0) {
     return {
       status: 'pass',
@@ -156,31 +152,22 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
     };
   }
 
-  // --- THIS IS THE BUG FIX ---
-  // We MUST use 'uiAmount' (the float) to match the 'totalSupply' (also a float).
-  // Using 'holder.amount' (a raw integer) caused a NaN error.
   const top10 = holders.slice(0, 10);
   const top10Balance = top10.reduce((sum, holder) => {
     const amount = parseFloat(holder.uiAmount); // Use uiAmount
     return sum + (isNaN(amount) ? 0 : amount);
   }, 0);
-  // -----------------------
-
-  // Guard against NaN division
+  
   if (totalSupply === 0) {
      return { status: 'pass', message: '✅ Token has 0 supply.' };
   }
 
   const top10Percentage = (top10Balance / totalSupply) * 100;
 
-  // Guard against NaN result (if calculations failed)
   if (isNaN(top10Percentage)) {
     return { status: 'fail', message: '❌ Failed to calculate holder distribution.' };
   }
 
-  // --- NEW, STRICTER RUG PULL CHECK ---
-  // We check the #1 holder *excluding* the LP
-  // Note: Helius 'getTokenLargestAccounts' already excludes the LP, which is perfect for this.
   const top1HolderAmount = parseFloat(holders[0]?.uiAmount) || 0;
   const top1Percentage = (top1HolderAmount / totalSupply) * 100;
 
@@ -198,7 +185,6 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
     };
   }
 
-  // Stricter check for the top 10 wallets
   if (top10Percentage > 40) {
     return {
       status: 'warn',
@@ -212,10 +198,6 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
   };
 }
 
-
-/**
- * --- THIS IS THE REAL LIQUIDITY CHECK (from last time) ---
- */
 function checkLiquidity(pair: any): CheckResult {
   if (!pair || !pair.liquidity) {
     return {

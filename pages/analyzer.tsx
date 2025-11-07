@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
-import { useRouter } from 'next/router'; // Import router to read URL
+import { useRouter } from 'next/router'; 
 import { motion, AnimatePresence } from 'framer-motion'; 
 
 const inter = Inter({ subsets: ['latin'] });
@@ -39,6 +39,11 @@ function formatDate(timestamp: number): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+// --- NEW: Shorten wallet address ---
+function shortenAddress(address: string): string {
+  if (!address) return '';
+  return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
 }
 
 // --- SAFETY SCORING LOGIC ---
@@ -147,6 +152,46 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
+// --- NEW: TOP HOLDERS CARD ---
+const TopHoldersCard = ({ holders, totalSupply, symbol }: { holders: any[], totalSupply: number, symbol: string }) => {
+  if (!holders || holders.length === 0 || totalSupply === 0) {
+    return (
+      <Card>
+        <h3 className="text-lg font-semibold text-gray-300 mb-4">Top Holders</h3>
+        <p className="text-gray-500">No holder data available.</p>
+      </Card>
+    );
+  }
+
+  const top10 = holders.slice(0, 10);
+
+  return (
+    <Card>
+      <h3 className="text-lg font-semibold text-gray-300 mb-4">Top 10 Holders</h3>
+      <div className="space-y-3">
+        {top10.map((holder, index) => {
+          const percentage = (parseFloat(holder.uiAmount) / totalSupply) * 100;
+          return (
+            <div key={holder.address} className="flex justify-between items-center text-sm">
+              <span className="text-gray-400">#{index + 1}</span>
+              <a 
+                href={`https://solscan.io/account/${holder.address}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-purple-400 hover:underline"
+              >
+                {shortenAddress(holder.address)}
+              </a>
+              <span className="text-white font-semibold">{percentage.toFixed(2)}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+};
+
+
 // --- Report Card (Main Layout) ---
 const ReportCard = ({ 
   report, 
@@ -185,13 +230,17 @@ const ReportCard = ({
             <div className="space-y-3">
               <ReportItem item={report.mintAuthority} />
               <ReportItem item={report.freezeAuthority} />
-              {/* --- THIS IS THE TYPO FIX --- */}
               <ReportItem item={report.holderDistribution} />
-              {/* ----------------------------- */}
               <ReportItem item={report.metadata} />
               <ReportItem item={report.liquidity} />
             </div>
           </Card>
+          {/* --- ADD THE NEW CARD TO THE SIDEBAR --- */}
+          <TopHoldersCard 
+            holders={report.holderDistribution.holders} 
+            totalSupply={report.totalSupply}
+            symbol={report.tokenInfo.symbol}
+          />
         </div>
         <div className="lg:col-span-2 space-y-6">
           <Card>
@@ -382,7 +431,7 @@ export default function Analyzer() {
         fetchReport(mint);
       }
     }
-  }, [router.isReady, router.query.mint]); // <-- Make sure to depend on the mint itself
+  }, [router.isReady, router.query.mint]);
 
   // This handles the new search bar on this page
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
