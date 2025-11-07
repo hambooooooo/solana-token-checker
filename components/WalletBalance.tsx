@@ -14,7 +14,7 @@ export const WalletBalance = () => {
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [usdBalance, setUsdBalance] = useState<number | null>(null);
 
-  // --- FIX #1: Add 'isMounted' state to prevent hydration errors ---
+  // This state prevents React Hydration errors
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -34,21 +34,24 @@ export const WalletBalance = () => {
         const lamports = await connection.getBalance(publicKey);
         const sol = lamports / LAMPORTS_PER_SOL;
         
-        // 2. Fetch SOL Price (using a reliable SOL/USDC pair from DexScreener)
+        // 2. Fetch SOL Price
         const priceUrl = 'https://api.dexscreener.com/latest/dex/pairs/solana/8BnEgHoWFysVcuFFX7QztDmzu9DPm5EXxLrcGZJg2XYH';
         const priceRes = await fetch(priceUrl);
-        if (!priceRes.ok) throw new Error('Failed to fetch SOL price');
+        
+        // --- THIS IS THE FIX ---
+        // We must check the response AND the data structure
+        if (!priceRes.ok) {
+          throw new Error('Failed to fetch SOL price from API');
+        }
         
         const priceData = await priceRes.json();
         
-        // --- FIX #2: Check if 'priceData.pair' exists before using it ---
-        if (!priceData || !priceData.pair) {
-          throw new Error('Invalid price data from DexScreener');
+        if (!priceData || !priceData.pair || !priceData.pair.priceUsd) {
+          throw new Error('Invalid price data structure from DexScreener');
         }
+        // -----------------------
+
         const solPrice = parseFloat(priceData.pair.priceUsd);
-        // -------------------------------------------------------------
-        
-        // 3. Calculate USD
         const usd = sol * solPrice;
 
         if (isMountedInEffect) {

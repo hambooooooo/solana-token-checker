@@ -40,7 +40,6 @@ function formatDate(timestamp: number): string {
     minute: '2-digit',
   });
 }
-// --- NEW: Shorten wallet address ---
 function shortenAddress(address: string): string {
   if (!address) return '';
   return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
@@ -152,9 +151,21 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
-// --- NEW: TOP HOLDERS CARD ---
-const TopHoldersCard = ({ holders, totalSupply, symbol }: { holders: any[], totalSupply: number, symbol: string }) => {
-  if (!holders || holders.length === 0 || totalSupply === 0) {
+// --- FIX #1: "Top Holders" card logic ---
+const TopHoldersCard = ({ holders, totalSupply }: { holders: any[], totalSupply: number }) => {
+  
+  // Check for 0 supply *first*
+  if (totalSupply === 0) {
+    return (
+      <Card>
+        <h3 className="text-lg font-semibold text-gray-300 mb-4">Top Holders</h3>
+        <p className="text-gray-500">Token has 0 supply. No holders to display.</p>
+      </Card>
+    );
+  }
+
+  // Then check for no holder data
+  if (!holders || holders.length === 0) {
     return (
       <Card>
         <h3 className="text-lg font-semibold text-gray-300 mb-4">Top Holders</h3>
@@ -235,11 +246,9 @@ const ReportCard = ({
               <ReportItem item={report.liquidity} />
             </div>
           </Card>
-          {/* --- ADD THE NEW CARD TO THE SIDEBAR --- */}
           <TopHoldersCard 
             holders={report.holderDistribution.holders} 
             totalSupply={report.totalSupply}
-            symbol={report.tokenInfo.symbol}
           />
         </div>
         <div className="lg:col-span-2 space-y-6">
@@ -270,26 +279,29 @@ const DexScreenerChart = ({ pair }: { pair: any }) => {
   );
 };
 
-// --- Market Data ---
+// --- FIX #2: Make MarketDataDashboard "crash-proof" ---
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No market data found for this token.</p>;
   }
+  
+  // Use optional chaining (?.) to safely access nested properties
   const txns = pair.txns?.h24 || { buys: 0, sells: 0 };
   const volume = pair.volume?.h24 || 0;
   const priceChange = pair.priceChange?.h24 || 0;
+  
   return (
     <div className="grid grid-cols-2 gap-4">
       <StatCard title="Price USD" value={formatUSD(pair.priceUsd)} change={priceChange} />
-      <StatCard title={`Price ${pair.quoteToken.symbol}`} value={formatNativePrice(pair.priceNative)} />
+      <StatCard title={`Price ${pair.quoteToken?.symbol || 'SOL'}`} value={formatNativePrice(pair.priceNative)} />
       <StatCard title="Market Cap" value={marketCap > 0 ? formatUSD(marketCap) : 'N/A'} tooltip="Market Cap provided by Helius" />
       <StatCard title="FDV" value={formatUSD(pair.fdv)} tooltip="Fully Diluted Valuation from DexScreener" />
-      <StatCard title="Liquidity" value={formatUSD(pair.liquidity.usd)} />
+      <StatCard title="Liquidity" value={formatUSD(pair.liquidity?.usd)} />
       <StatCard title="24h Volume" value={formatUSD(volume)} />
       <StatCard title="24h Transactions" value={formatNumber(txns.buys + txns.sells)} />
       <StatCard title="Buys vs Sells (24h)" value={`${formatNumber(txns.buys)} / ${formatNumber(txns.sells)}`} />
       <StatCard title="Pair Created" value={formatDate(pair.pairCreatedAt)} />
-      <StatCard title="Pair Address" value={`${pair.pairAddress.substring(0, 4)}...${pair.pairAddress.substring(pair.pairAddress.length - 4)}`} />
+      <StatCard title="Pair Address" value={shortenAddress(pair.pairAddress)} />
     </div>
   );
 };
