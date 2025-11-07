@@ -9,8 +9,10 @@ import bcrypt from 'bcryptjs';
 // Force NodeJS runtime
 export const runtime = 'nodejs';
 
+/** @type {import('next-auth').AuthOptions} */
 export const authOptions = {
-  adapter: PrismaAdapter(prisma),
+  // Only use Prisma adapter when DATABASE_URL is present to avoid runtime crashes
+  adapter: process.env.DATABASE_URL ? PrismaAdapter(prisma) : undefined,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -23,30 +25,40 @@ export const authOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error('Missing credentials');
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            throw new Error('Missing credentials');
+          }
+
+          // Defensive: ensure email is a string
+          const email = String(credentials.email).toLowerCase();
+
+          const user = await prisma.user.findUnique({
+            where: {
+              email,
+            },
+          });
+
+          if (!user || !user.hashedPassword) {
+            // Return null to let NextAuth handle a failed auth without 500
+            return null;
+          }
+
+          const isCorrectPassword = await bcrypt.compare(
+            credentials.password,
+            user.hashedPassword
+          );
+
+          if (!isCorrectPassword) {
+            return null;
+          }
+
+          return user;
+        } catch (err) {
+          console.error('Credentials authorize error:', err);
+          // Fail authentication gracefully instead of causing a 500
+          return null;
         }
-
-        const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email,
-          },
-        });
-
-        if (!user || !user.hashedPassword) {
-          throw new Error('Invalid credentials');
-        }
-
-        const isCorrectPassword = await bcrypt.compare(
-          credentials.password,
-          user.hashedPassword
-        );
-
-        if (!isCorrectPassword) {
-          throw new Error('Invalid credentials');
-        }
-
-        return user;
       },
     }),
   ],
@@ -69,6 +81,12 @@ export const authOptions = {
         session.user.id = token.id;
       }
       return session;
+    },
+  },
+  events: {
+    error: (message) => {
+      // NextAuth will call this for unhandled errors; log the payload for debugging
+      console.error('NextAuth event error:', message);
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
