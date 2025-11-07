@@ -1,22 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 
-// The global scope is checked to ensure that the PrismaClient instance
-// is not recreated on every hot-reload in development mode.
+// Declare a global variable to hold the prisma client
+// This prevents multiple instances in development
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// Use the Vercel-provided POSTGRES_URL if it exists, otherwise use DATABASE_URL.
-// This is the cleanest way to ensure the live environment uses the right key.
-const connectionUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-
+// Use the existing instance or create a new one
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    datasources: {
-      db: {
-        url: connectionUrl, // Explicitly pass the resolved URL here
-      },
-    },
     log: ['query', 'error', 'warn'],
   });
 
+// Save the instance to the global object in development
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
