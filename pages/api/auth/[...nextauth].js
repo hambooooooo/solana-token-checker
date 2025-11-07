@@ -1,26 +1,24 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { prisma } from '../../../lib/prisma'; // Already fixed to relative path
+import { prisma } from '../../../lib/prisma';
 
-// --- FINAL FIX: Overriding the database URL in the adapter ---
-const customAdapter = PrismaAdapter(prisma);
+// ------------------------------------------------------------------
+// FINAL FIX: Auth.js automatically checks process.env.DATABASE_URL.
+// Since we have POSTGRES_URL, we set the DATABASE_URL to POSTGRES_URL 
+// only if it's missing, forcing Auth.js to use the correct key.
+// ------------------------------------------------------------------
 
-// We manually inject the Vercel-provided POSTGRES_URL into the adapter's options
-// This is the cleanest way to resolve the conflict when Vercel provides many DB URLs.
-const finalAdapter = {
-  ...customAdapter,
-  // This line forces the adapter to use the POSTGRES_URL from the Vercel environment.
-  options: {
-    ...customAdapter.options,
-    url: process.env.POSTGRES_URL, 
-  },
-};
-// -------------------------------------------------------------
+if (!process.env.DATABASE_URL && process.env.POSTGRES_URL) {
+    // If DATABASE_URL is not set (which is what Prisma looks for), 
+    // we use the Neon-provided POSTGRES_URL
+    process.env.DATABASE_URL = process.env.POSTGRES_URL;
+}
 
 export const authOptions = {
-  // Use the new, configured adapter
-  adapter: finalAdapter,
+  // Now, Prisma/Auth.js will correctly initialize the adapter 
+  // because we've set DATABASE_URL, which the standard adapter expects.
+  adapter: PrismaAdapter(prisma), 
   
   providers: [
     GoogleProvider({
@@ -32,8 +30,9 @@ export const authOptions = {
   session: {
     strategy: 'jwt',
   },
-
+  
   callbacks: {
+    // ... (rest of callbacks are unchanged)
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id;
@@ -51,7 +50,9 @@ export const authOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   
   pages: {
-    signIn: '/', 
+    signIn: '/',
+    // If the crash persists, we need to inspect the actual error page.
+    error: '/api/auth/error' // Ensure this is set to the default if you remove custom error handling
   }
 };
 
