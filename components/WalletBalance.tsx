@@ -29,29 +29,40 @@ export const WalletBalance = () => {
 
     let isMountedInEffect = true;
     const getBalance = async () => {
+      let solPrice = 0;
+      
+      // --- FETCH SOL PRICE (Robust check) ---
+      try {
+        const priceUrl = 'https://api.dexscreener.com/latest/dex/pairs/solana/8BnEgHoWFysVcuFFX7QztDmzu9DPm5EXxLrcGZJg2XYH';
+        const priceRes = await fetch(priceUrl);
+        
+        // Check if API call failed completely
+        if (!priceRes.ok) {
+           console.error('API call for SOL price failed:', priceRes.statusText);
+           solPrice = 0; // Use 0 if API is down
+        } else {
+           const priceData = await priceRes.json();
+           
+           // Check for invalid data structure
+           if (!priceData || !priceData.pair || !priceData.pair.priceUsd) {
+             console.error('Invalid price data structure from DexScreener');
+             solPrice = 0;
+           } else {
+             solPrice = parseFloat(priceData.pair.priceUsd);
+           }
+        }
+      } catch (error) {
+        console.error('Error parsing SOL price data:', error);
+        solPrice = 0; // Catch network/JSON parse errors
+      }
+      // ------------------------------------
+
       try {
         // 1. Fetch SOL Balance
         const lamports = await connection.getBalance(publicKey);
         const sol = lamports / LAMPORTS_PER_SOL;
         
-        // 2. Fetch SOL Price
-        const priceUrl = 'https://api.dexscreener.com/latest/dex/pairs/solana/8BnEgHoWFysVcuFFX7QztDmzu9DPm5EXxLrcGZJg2XYH';
-        const priceRes = await fetch(priceUrl);
-        
-        // --- THIS IS THE FIX ---
-        // We must check the response AND the data structure
-        if (!priceRes.ok) {
-          throw new Error('Failed to fetch SOL price from API');
-        }
-        
-        const priceData = await priceRes.json();
-        
-        if (!priceData || !priceData.pair || !priceData.pair.priceUsd) {
-          throw new Error('Invalid price data structure from DexScreener');
-        }
-        // -----------------------
-
-        const solPrice = parseFloat(priceData.pair.priceUsd);
+        // 2. Calculate USD (using 0 if price failed)
         const usd = sol * solPrice;
 
         if (isMountedInEffect) {
@@ -59,9 +70,9 @@ export const WalletBalance = () => {
           setUsdBalance(usd);
         }
       } catch (error) {
-        console.error('Failed to get wallet balance:', error);
+        console.error('Failed to get wallet balance from RPC:', error);
         if (isMountedInEffect) {
-          setSolBalance(0); // Show 0 on error
+          setSolBalance(0); 
           setUsdBalance(0);
         }
       }
@@ -69,14 +80,12 @@ export const WalletBalance = () => {
 
     getBalance();
     return () => { isMountedInEffect = false; };
-  }, [connection, publicKey, isMounted]); // Re-run when wallet connects or component mounts
+  }, [connection, publicKey, isMounted]); 
 
-  // Don't render anything until mounted AND wallet is connected
   if (!isMounted || !publicKey) {
     return null; 
   }
 
-  // Show a simple loader while fetching
   const isLoading = solBalance === null;
 
   return (
