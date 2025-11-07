@@ -1,7 +1,5 @@
-import type { NextConfig } from 'next';
-
 /** @type {import('next').NextConfig} */
-const nextConfig: NextConfig = {
+const nextConfig = {
   reactStrictMode: true,
   
   // We're only transpiling the wallet adapters now
@@ -13,4 +11,5 @@ const nextConfig: NextConfig = {
   ],
 };
 
-export default nextConfig;
+// Use module.exports for CommonJS compatibility with Vercel's build
+module.exports = nextConfig;
