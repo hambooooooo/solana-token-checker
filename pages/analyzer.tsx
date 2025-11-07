@@ -187,6 +187,7 @@ const ReportCard = ({
               <ReportItem item={report.freezeAuthority} />
               {/* --- THIS IS THE TYPO FIX --- */}
               <ReportItem item={report.holderDistribution} />
+              {/* ----------------------------- */}
               <ReportItem item={report.metadata} />
               <ReportItem item={report.liquidity} />
             </div>
@@ -381,7 +382,7 @@ export default function Analyzer() {
         fetchReport(mint);
       }
     }
-  }, [router.isReady, router.query]);
+  }, [router.isReady, router.query.mint]); // <-- Make sure to depend on the mint itself
 
   // This handles the new search bar on this page
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

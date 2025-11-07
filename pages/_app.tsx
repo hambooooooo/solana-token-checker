@@ -8,7 +8,9 @@ import { useMemo } from 'react';
 
 // Import the wallet adapter's CSS
 import '@solana/wallet-adapter-react-ui/styles.css';
-import { Header } from '@/components/Header'; // This import is now correct
+// --- FIX: Use a relative path to find the component ---
+import { Header } from '../components/Header'; 
+// ----------------------------------------------------
 
 export default function App({ Component, pageProps }: AppProps) {
   

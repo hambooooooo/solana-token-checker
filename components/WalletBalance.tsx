@@ -14,14 +14,20 @@ export const WalletBalance = () => {
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [usdBalance, setUsdBalance] = useState<number | null>(null);
 
+  // --- FIX #1: Add 'isMounted' state to prevent hydration errors ---
+  const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
-    if (!connection || !publicKey) {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!connection || !publicKey || !isMounted) {
       setSolBalance(null);
       setUsdBalance(null);
       return;
     }
 
-    let isMounted = true;
+    let isMountedInEffect = true;
     const getBalance = async () => {
       try {
         // 1. Fetch SOL Balance
@@ -34,18 +40,24 @@ export const WalletBalance = () => {
         if (!priceRes.ok) throw new Error('Failed to fetch SOL price');
         
         const priceData = await priceRes.json();
+        
+        // --- FIX #2: Check if 'priceData.pair' exists before using it ---
+        if (!priceData || !priceData.pair) {
+          throw new Error('Invalid price data from DexScreener');
+        }
         const solPrice = parseFloat(priceData.pair.priceUsd);
+        // -------------------------------------------------------------
         
         // 3. Calculate USD
         const usd = sol * solPrice;
 
-        if (isMounted) {
+        if (isMountedInEffect) {
           setSolBalance(sol);
           setUsdBalance(usd);
         }
       } catch (error) {
         console.error('Failed to get wallet balance:', error);
-        if (isMounted) {
+        if (isMountedInEffect) {
           setSolBalance(0); // Show 0 on error
           setUsdBalance(0);
         }
@@ -53,11 +65,11 @@ export const WalletBalance = () => {
     };
 
     getBalance();
-    return () => { isMounted = false; };
-  }, [connection, publicKey]); // Re-run when wallet connects
+    return () => { isMountedInEffect = false; };
+  }, [connection, publicKey, isMounted]); // Re-run when wallet connects or component mounts
 
-  // Don't render anything if wallet is not connected
-  if (!publicKey) {
+  // Don't render anything until mounted AND wallet is connected
+  if (!isMounted || !publicKey) {
     return null; 
   }
 
