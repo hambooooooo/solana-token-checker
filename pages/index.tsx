@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'; // <-- Import useEffect
+import { useState, useEffect } from 'react';
 import type { SafetyReport } from '@/lib/helius';
 import Head from 'next/head'; 
 import { Inter } from 'next/font/google';
@@ -95,18 +95,16 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // --- NEW: Balance State ---
   const [userBalance, setUserBalance] = useState<number | null>(null);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
   const { publicKey } = useWallet(); // Get the connected wallet's public key
-  // -------------------------
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setReport(null);
     setError(null);
-    setUserBalance(null); // Clear old balance on new search
+    setUserBalance(null); 
     try {
       const response = await fetch(`/api/check/${mintAddress}`);
       if (!response.ok) {
@@ -128,9 +126,12 @@ export default function Home() {
     }
   };
 
-  // --- NEW: useEffect to fetch balance ---
   useEffect(() => {
-    // If we have a wallet and a report
+    // Reset balance if wallet disconnects
+    if (!publicKey) {
+      setUserBalance(null);
+    }
+    
     if (publicKey && report) {
       const fetchBalance = async () => {
         setIsBalanceLoading(true);
@@ -139,9 +140,13 @@ export default function Home() {
           if (response.ok) {
             const data = await response.json();
             setUserBalance(data.uiAmount);
+          } else {
+            setUserBalance(null);
+            console.error("API call to /api/balance failed:", response.statusText);
           }
         } catch (err) {
           console.error("Failed to fetch balance:", err);
+          setUserBalance(null);
         } finally {
           setIsBalanceLoading(false);
         }
@@ -149,8 +154,7 @@ export default function Home() {
       
       fetchBalance();
     }
-  }, [publicKey, report, mintAddress]); // Re-run when these change
-  // --------------------------------------
+  }, [publicKey, report, mintAddress]); 
 
   return (
     <>
@@ -193,7 +197,7 @@ export default function Home() {
             </button>
           </form>
 
-          {/* --- RESULTS AREA (UPDATED) --- */}
+          {/* --- RESULTS AREA --- */}
           <div className="mt-8">
             <AnimatePresence>
               {error && <ErrorMessage message={error} />}
@@ -201,8 +205,9 @@ export default function Home() {
                 <ReportCard 
                   report={report} 
                   mintAddress={mintAddress}
-                  userBalance={userBalance} // Pass balance data
-                  isBalanceLoading={isBalanceLoading} // Pass loading state
+                  userBalance={userBalance} 
+                  isBalanceLoading={isBalanceLoading}
+                  // We no longer pass publicKey
                 />
               )}
               {!isLoading && !error && !report && <InfoBox />}
@@ -235,7 +240,7 @@ const Card: React.FC<{ children: React.ReactNode, className?: string, style?: Re
 
 // --- Safety Meter (Unchanged) ---
 const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
-  const circumference = 2 * Math.PI * 60; // 2 * pi * radius
+  const circumference = 2 * Math.PI * 60; 
   const offset = circumference - (score / 100) * circumference;
 
   return (
@@ -281,14 +286,31 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
-// --- NEW: User Balance Card ---
-const UserBalanceCard = ({ balance, isLoading, symbol }: { balance: number | null, isLoading: boolean, symbol: string }) => {
+// --- UPDATED: User Balance Card ---
+const UserBalanceCard = ({ 
+  balance, 
+  isLoading, 
+  symbol, 
+}: { 
+  balance: number | null, 
+  isLoading: boolean, 
+  symbol: string,
+}) => {
+  // --- THIS IS THE FIX ---
+  // We check the wallet status directly inside this component.
+  const { publicKey } = useWallet();
+  // -----------------------
+
   let content = null;
 
-  if (isLoading) {
+  if (!publicKey) {
+    // STATE 1: No wallet connected
+    content = <div className="text-lg text-gray-500">Connect wallet to see balance</div>;
+  } else if (isLoading) {
+    // STATE 2: Wallet connected, loading balance
     content = <div className="text-2xl font-bold text-gray-400 animate-pulse">Loading...</div>;
   } else if (balance !== null) {
-    // Format the balance to a reasonable number of decimals
+    // STATE 3: Wallet connected, balance loaded (even 0)
     const formattedBalance = balance > 1000 ? formatNumber(balance) : balance.toFixed(4);
     content = (
       <div className="text-2xl font-bold text-white">
@@ -296,7 +318,8 @@ const UserBalanceCard = ({ balance, isLoading, symbol }: { balance: number | nul
       </div>
     );
   } else {
-    content = <div className="text-lg text-gray-500">Connect wallet to see balance</div>;
+    // STATE 4: Wallet connected, but balance is still null (API failed or didn't run)
+    content = <div className="text-lg text-gray-500">No balance found</div>;
   }
 
   return (
@@ -315,12 +338,12 @@ const ReportCard = ({
   report, 
   mintAddress, 
   userBalance, 
-  isBalanceLoading 
+  isBalanceLoading,
 }: { 
   report: Report, 
   mintAddress: string,
   userBalance: number | null,
-  isBalanceLoading: boolean
+  isBalanceLoading: boolean,
 }) => {
   const safetyScore = calculateSafetyScore(report);
   const raydiumUrl = `https://raydium.io/swap/?outputMint=${mintAddress}`;
@@ -351,13 +374,12 @@ const ReportCard = ({
         
         {/* --- Sidebar (Column 1) --- */}
         <div className="lg:col-span-1 space-y-6">
-          {/* --- ADDED USER BALANCE CARD --- */}
           <UserBalanceCard 
             balance={userBalance} 
             isLoading={isBalanceLoading} 
-            symbol={report.tokenInfo.symbol} 
+            symbol={report.tokenInfo.symbol}
+            // No longer needs publicKey passed in
           />
-          {/* ----------------------------- */}
           <SafetyMeter key={safetyScore.score} {...safetyScore} />
           <Card>
             <h3 className="text-lg font-semibold text-gray-300 mb-4">Safety Details</h3>
@@ -512,5 +534,3 @@ const InfoBox = () => (
     </p>
   </motion.div>
 );
-
-//test
