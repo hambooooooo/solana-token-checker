@@ -45,7 +45,7 @@ function shortenAddress(address: string): string {
   return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
 }
 
-// --- SAFETY SCORING LOGIC ---
+// --- NEW: Subtractive Scoring Model ---
 type SafetyScore = {
   score: number;
   color: string;
@@ -53,23 +53,50 @@ type SafetyScore = {
 };
 
 function calculateSafetyScore(report: Report): SafetyScore {
-  let score = 0;
-  const checks = [
-    report.mintAuthority,
-    report.freezeAuthority,
-    report.holderDistribution,
-    report.metadata,
-    report.liquidity, 
-  ];
+  let score = 100;
+  
+  // Rule 1: 0 Supply token (like Wobbles)
+  // These are often special cases, not "scams" but not "investable"
+  if (report.totalSupply === 0) {
+    score = 80; // Give it a "Caution" score by default
+  } else {
+    // Standard Scoring
+    
+    // --- Critical Failures (Instant 0) ---
+    if (report.mintAuthority.status === 'fail') {
+      score = 0;
+    }
+    if (report.freezeAuthority.status === 'fail') {
+      score = 0;
+    }
 
-  for (const check of checks) {
-    if (check.status === 'pass') {
-      score += 20;
-    } else if (check.status === 'warn') {
-      score += 10;
+    // Only run other checks if not already 0
+    if (score > 0) {
+      // --- Liquidity Amount Check ---
+      if (report.liquidity.status === 'fail') {
+        score -= 40;
+      } else if (report.liquidity.status === 'warn') {
+        score -= 20;
+      }
+
+      // --- Holder Distribution Check ---
+      if (report.holderDistribution.status === 'fail') {
+        score -= 40;
+      } else if (report.holderDistribution.status === 'warn') {
+        score -= 20;
+      }
+
+      // --- Metadata Check (Minor) ---
+      if (report.metadata.status === 'warn') {
+        score -= 5;
+      }
     }
   }
 
+  // Ensure score isn't below 0
+  if (score < 0) score = 0;
+
+  // Determine color and rating
   let color: string;
   let rating: string;
 
@@ -86,6 +113,7 @@ function calculateSafetyScore(report: Report): SafetyScore {
 
   return { score, color, rating };
 }
+// ---------------------------------
 
 // --- Card component (reusable) ---
 const Card: React.FC<{ children: React.ReactNode, className?: string, style?: React.CSSProperties }> = 
@@ -151,7 +179,7 @@ const SafetyMeter = ({ score, color, rating }: SafetyScore) => {
   );
 };
 
-// --- FIX #1: "Top Holders" card logic ---
+// --- FIXED: TopHoldersCard logic ---
 const TopHoldersCard = ({ holders, totalSupply }: { holders: any[], totalSupply: number }) => {
   
   // Check for 0 supply *first*
@@ -279,7 +307,7 @@ const DexScreenerChart = ({ pair }: { pair: any }) => {
   );
 };
 
-// --- FIX #2: Make MarketDataDashboard "crash-proof" ---
+// --- FIXED: MarketDataDashboard (Crash-proof) ---
 const MarketDataDashboard = ({ pair, marketCap }: { pair: any, marketCap: number }) => {
   if (!pair) {
     return <p className="text-sm text-gray-500">No market data found for this token.</p>;

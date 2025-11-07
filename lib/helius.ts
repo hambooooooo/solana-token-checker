@@ -21,7 +21,7 @@ export type SafetyReport = {
     links: any; // For social links
   };
   marketCap: number; // Helius Market Cap
-  totalSupply: number; // <-- ADD THIS LINE
+  totalSupply: number; 
   // DexScreener Data
   dexScreenerPair: any; // This will hold all the "jazz"
 };
@@ -68,7 +68,6 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   const mintAuthority = checkMintAuthority(assetData);
   const freezeAuthority = checkFreezeAuthority(assetData);
   
-  // Helius provides supply as a float, which is what we need
   const totalSupply = assetData.supply?.supply || 0;
   
   const holderDistribution = {
@@ -77,7 +76,7 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
   };
 
   const metadata = checkMetadata(assetData);
-  const liquidity = checkLiquidity(dexScreenerPair);
+  const liquidity = checkLiquidity(dexScreenerPair, totalSupply); // <-- Pass totalSupply
   
   const marketCap = assetData.supply?.market_cap || 0;
 
@@ -94,7 +93,7 @@ export async function getSafetyReport(mintAddress: string): Promise<SafetyReport
       links: assetData.content.links || {},
     },
     marketCap,
-    totalSupply: totalSupply, // <-- ADD THIS LINE
+    totalSupply: totalSupply, 
     dexScreenerPair: dexScreenerPair,
   };
 }
@@ -140,11 +139,8 @@ function checkMetadata(assetData: any): CheckResult {
   };
 }
 
+// --- NEW, STRICTER HOLDER CHECK ---
 function checkHolderDistribution(holders: any[], totalSupply: number): CheckResult {
-  if (!holders || holders.length === 0) {
-    return { status: 'fail', message: '❌ Could not retrieve holder data.' };
-  }
-  
   if (totalSupply === 0) {
     return {
       status: 'pass',
@@ -152,9 +148,13 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
     };
   }
 
+  if (!holders || holders.length === 0) {
+    return { status: 'fail', message: '❌ Could not retrieve holder data.' };
+  }
+  
   const top10 = holders.slice(0, 10);
   const top10Balance = top10.reduce((sum, holder) => {
-    const amount = parseFloat(holder.uiAmount); // Use uiAmount
+    const amount = parseFloat(holder.uiAmount); 
     return sum + (isNaN(amount) ? 0 : amount);
   }, 0);
   
@@ -171,21 +171,22 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
   const top1HolderAmount = parseFloat(holders[0]?.uiAmount) || 0;
   const top1Percentage = (top1HolderAmount / totalSupply) * 100;
 
-  if (top1Percentage > 20) {
+  // --- MUCH STRICTER ---
+  if (top1Percentage > 10) {
      return {
       status: 'fail',
       message: `❌ Extreme Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply. This is a massive rug pull risk.`,
     };
   }
   
-  if (top1Percentage > 10) {
+  if (top1Percentage > 5) {
      return {
       status: 'warn',
       message: `⚠️ High Risk: The top wallet holds ${top1Percentage.toFixed(1)}% of the supply.`,
     };
   }
 
-  if (top10Percentage > 40) {
+  if (top10Percentage > 25) {
     return {
       status: 'warn',
       message: `⚠️ High Concentration: The top 10 wallets hold ${top10Percentage.toFixed(1)}% of the supply. A sell-off could crash the price.`,
@@ -198,7 +199,15 @@ function checkHolderDistribution(holders: any[], totalSupply: number): CheckResu
   };
 }
 
-function checkLiquidity(pair: any): CheckResult {
+// --- NEW, STRICTER LIQUIDITY CHECK ---
+function checkLiquidity(pair: any, totalSupply: number): CheckResult {
+  if (totalSupply === 0) {
+    return {
+      status: 'pass', // This is a "pass" for this check, but will be scored as 0.
+      message: '✅ Token has 0 supply. Liquidity is not applicable.',
+    };
+  }
+
   if (!pair || !pair.liquidity) {
     return {
       status: 'fail',
@@ -208,19 +217,21 @@ function checkLiquidity(pair: any): CheckResult {
 
   const lpValue = parseFloat(pair.liquidity.usd);
 
-  if (lpValue < 1000) {
+  // --- MUCH STRICTER ---
+  if (lpValue < 10000) {
     return {
       status: 'fail',
       message: `❌ Dangerously Low Liquidity: Only $${lpValue.toLocaleString()} in the pool. This is a high-risk rug pull.`,
     };
   }
-  if (lpValue < 10000) {
+  if (lpValue < 50000) {
     return {
       status: 'warn',
       message: `⚠️ Low Liquidity: Only $${lpValue.toLocaleString()} in the pool. Be cautious of high price impact (slippage).`,
     };
   }
   
+  // NOTE: This check does NOT verify if liquidity is locked or burned.
   return {
     status: 'pass',
     message: `✅ Liquidity Found: $${lpValue.toLocaleString()} in the pool. (Note: This does not verify if LP is locked.)`,
@@ -273,6 +284,5 @@ async function fetchHeliusTokenLargestHolders(mintAddress: string): Promise<any[
   if (!data.result) {
     throw new Error('Failed to fetch holder data (no result)');
   }
-  // This is the full list of holders
   return data.result.value; 
 }
